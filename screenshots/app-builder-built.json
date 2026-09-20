@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "TRONX Workspace",
+      "hasCanvas": false,
+      "bodyTextLen": 246,
+      "bodyTextHash": "f3c4cff3ad3d1ed49ba71632eae452af0064005d6471362fa49bd91247b7362b",
+      "bodyTextPrefix": "TRONX WORKSPACE Welcome back The first account becomes CEO and o",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "TRONX Workspace",
+      "hasCanvas": false,
+      "bodyTextLen": 246,
+      "bodyTextHash": "f3c4cff3ad3d1ed49ba71632eae452af0064005d6471362fa49bd91247b7362b",
+      "bodyTextPrefix": "TRONX WORKSPACE Welcome back The first account becomes CEO and o",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

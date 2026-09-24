@@ -4,6 +4,7 @@ import {
   Bot,
   Building2,
   CalendarDays,
+  ClipboardCheck,
   FolderKanban,
   Inbox,
   LayoutDashboard,
@@ -19,28 +20,35 @@ import {
   Files,
   ChartNoAxesCombined,
   Briefcase,
+  Video,
+  Target,
+  IndianRupee,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { UserButton } from "@/lib/auth/gates";
 import { stopTimer } from "@/lib/server/fns";
-import { canEnroll, hasPerm, portalLabel } from "@/lib/permissions";
+import { canEnroll, hasPerm, isExecOffice, portalLabel } from "@/lib/permissions";
 import { ROLE_LABEL } from "@/lib/types";
 import { cn, firstName } from "@/lib/utils";
 import { CommandPalette } from "./command-palette";
 import { CreateProjectDialog, CreateTaskDialog } from "./create-dialogs";
+import { CreateLeadDialog } from "./commercial-dialogs";
 import { EnrollEmployeeDialog } from "./enroll-employee";
+import { MeetDialog } from "./meet-dialog";
+import { ThemeSwitcher } from "./theme-switcher";
 import { Button } from "./ui/button";
 import { PersonAvatar, Tip } from "./ui/display";
 import { useWorkspace } from "./workspace";
 
 export function AppShell() {
-  const { me, org, unreadNotifications, runningTimer } = useWorkspace();
+  const { me, org, unreadNotifications, runningTimer, liveMeetingCount, openOnboardingCount, overdueFollowUps } = useWorkspace();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [cmdOpen, setCmdOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
+  const [meetOpen, setMeetOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const qc = useQueryClient();
   const stop = useMutation({
@@ -55,27 +63,41 @@ export function AppShell() {
     setMobileNav(false);
   }, [pathname]);
 
+  const showOnboarding = isExecOffice(me.role) || openOnboardingCount > 0;
   const navItems = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard },
     { to: "/my-work", label: "My Work", icon: Briefcase },
     { to: "/tasks", label: "Tasks", icon: SquareCheckBig },
     { to: "/projects", label: "Projects", icon: FolderKanban },
+    ...(hasPerm(me.role, "lead.view") ? [{ to: "/leads", label: "Leads", icon: Target }] : []),
+    ...(hasPerm(me.role, "finance.view") ? [{ to: "/finance", label: "Finance", icon: IndianRupee }] : []),
     { to: "/employees", label: "Employees", icon: Users },
+    ...(showOnboarding ? [{ to: "/onboarding", label: "Onboarding", icon: ClipboardCheck }] : []),
     { to: "/teams", label: "Teams", icon: Building2 },
     { to: "/chat", label: "Chat", icon: MessageSquare },
+    { to: "/meetings", label: "Meetings", icon: Video },
     { to: "/calendar", label: "Calendar", icon: CalendarDays },
     { to: "/files", label: "Files", icon: Files },
     { to: "/inbox", label: "Inbox", icon: Inbox },
     { to: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
     { to: "/ai", label: "TRONX AI", icon: Bot },
-  ] as const;
+  ];
 
   const nav = (
     <nav className="flex flex-col gap-0.5 px-2">
       {navItems.map((item) => {
         const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
         const Icon = item.icon;
-        const badge = item.to === "/inbox" && unreadNotifications > 0 ? unreadNotifications : 0;
+        const badge =
+          item.to === "/inbox" && unreadNotifications > 0
+            ? unreadNotifications
+            : item.to === "/meetings" && liveMeetingCount > 0
+              ? liveMeetingCount
+              : item.to === "/onboarding" && openOnboardingCount > 0
+                ? openOnboardingCount
+                : item.to === "/leads" && overdueFollowUps > 0
+                  ? overdueFollowUps
+                  : 0;
         return (
           <Link
             key={item.to}
@@ -189,6 +211,13 @@ export function AppShell() {
                 Task
               </Button>
             </CreateTaskDialog>
+            {hasPerm(me.role, "lead.manage") ? (
+              <CreateLeadDialog>
+                <Button size="sm" variant="secondary" className="hidden xl:inline-flex">
+                  Lead
+                </Button>
+              </CreateLeadDialog>
+            ) : null}
             {hasPerm(me.role, "project.create") ? (
               <CreateProjectDialog>
                 <Button size="sm" variant="secondary" className="hidden xl:inline-flex">
@@ -196,6 +225,13 @@ export function AppShell() {
                 </Button>
               </CreateProjectDialog>
             ) : null}
+            <MeetDialog open={meetOpen} onOpenChange={setMeetOpen}>
+              <Button size="sm" variant="secondary" className="hidden sm:inline-flex">
+                <Video className="size-4" />
+                Meet
+              </Button>
+            </MeetDialog>
+            <ThemeSwitcher />
             <Link
               to="/inbox"
               className="relative grid size-10 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -229,7 +265,7 @@ export function AppShell() {
         {[
           { to: "/", icon: LayoutDashboard, label: "Home" },
           { to: "/tasks", icon: SquareCheckBig, label: "Tasks" },
-          { to: "/employees", icon: Users, label: "People" },
+          { to: "/meetings", icon: Video, label: "Meet" },
           { to: "/chat", icon: MessageSquare, label: "Chat" },
           { to: "/inbox", icon: Inbox, label: "Inbox" },
         ].map((item) => {
@@ -256,6 +292,7 @@ export function AppShell() {
         onOpenChange={setCmdOpen}
         onCreateTask={() => setTaskOpen(true)}
         onEnroll={() => setEnrollOpen(true)}
+        onStartMeeting={() => setMeetOpen(true)}
       />
       <CreateTaskDialog open={taskOpen} onOpenChange={setTaskOpen} />
       {canEnroll(me.role) ? <EnrollEmployeeDialog open={enrollOpen} onOpenChange={setEnrollOpen} /> : null}

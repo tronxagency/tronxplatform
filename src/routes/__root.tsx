@@ -6,8 +6,8 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useState } from "react";
-import { Toaster } from "sonner";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { ThemeProvider, THEME_BOOT_SCRIPT, ThemedToaster } from "@/components/theme";
 import { TooltipProvider } from "@/components/ui/display";
 import { AuthProvider } from "@/lib/auth/provider";
 import { createServerFn } from "@tanstack/react-start";
@@ -31,7 +31,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#0a0a0c" },
       {
         name: "description",
-        content: "TRONX Workspace — projects, tasks, chat and work analytics for teams.",
+        content: "TRONX Workspace — the internal operating system for people, projects, meetings and work.",
       },
     ],
     links: [
@@ -60,20 +60,23 @@ function RootDocument() {
       }),
   );
   return (
-    <html lang="en" className="dark antialiased" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="min-h-dvh bg-background text-foreground">
+      <body className="min-h-dvh bg-background text-foreground antialiased">
         <PreviewHostBridge />
-        <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <TooltipProvider>
-              <Outlet />
-              <Toaster theme="dark" position="bottom-right" richColors={false} />
-            </TooltipProvider>
-          </QueryClientProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <QueryClientProvider client={queryClient}>
+              <TooltipProvider>
+                <Outlet />
+                <ThemedToaster />
+              </TooltipProvider>
+            </QueryClientProvider>
+          </AuthProvider>
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>

@@ -19,14 +19,25 @@ import { Route as AppCalendarRouteImport } from './routes/_app/calendar'
 import { Route as AppChatRouteImport } from './routes/_app/chat'
 import { Route as AppEmployeesRouteImport } from './routes/_app/employees'
 import { Route as AppFilesRouteImport } from './routes/_app/files'
+import { Route as AppFinanceRouteImport } from './routes/_app/finance'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
+import { Route as AppLeadsRouteImport } from './routes/_app/leads'
+import { Route as AppMeetingsRouteImport } from './routes/_app/meetings'
 import { Route as AppMyWorkRouteImport } from './routes/_app/my-work'
+import { Route as AppOnboardingRouteImport } from './routes/_app/onboarding'
 import { Route as AppProjectsRouteImport } from './routes/_app/projects'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as AppTeamsRouteImport } from './routes/_app/teams'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppEmployeesIndexRouteImport } from './routes/_app/employees.index'
 import { Route as AppEmployeesEmployeeIdRouteImport } from './routes/_app/employees.$employeeId'
+import { Route as AppLeadsIndexRouteImport } from './routes/_app/leads.index'
+import { Route as AppLeadsLeadIdRouteImport } from './routes/_app/leads.$leadId'
+import { Route as AppMeetingsIndexRouteImport } from './routes/_app/meetings.index'
+import { Route as AppMeetingsMeetingIdRouteImport } from './routes/_app/meetings.$meetingId'
+import { Route as AppOnboardingIndexRouteImport } from './routes/_app/onboarding.index'
+import { Route as AppOnboardingOnboardingIdRouteImport } from './routes/_app/onboarding.$onboardingId'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects.index'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects.$projectId'
 import { Route as AppTasksIndexRouteImport } from './routes/_app/tasks.index'
@@ -82,14 +93,34 @@ const AppFilesRoute = AppFilesRouteImport.update({
   path: '/files',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFinanceRoute = AppFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLeadsRoute = AppLeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMeetingsRoute = AppMeetingsRouteImport.update({
+  id: '/meetings',
+  path: '/meetings',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMyWorkRoute = AppMyWorkRouteImport.update({
   id: '/my-work',
   path: '/my-work',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProjectsRoute = AppProjectsRouteImport.update({
@@ -112,6 +143,11 @@ const AppTeamsRoute = AppTeamsRouteImport.update({
   path: '/teams',
   getParentRoute: () => AppRoute,
 } as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppEmployeesIndexRoute = AppEmployeesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -122,6 +158,37 @@ const AppEmployeesEmployeeIdRoute = AppEmployeesEmployeeIdRouteImport.update({
   path: '/$employeeId',
   getParentRoute: () => AppEmployeesRoute,
 } as any)
+const AppLeadsIndexRoute = AppLeadsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppLeadsRoute,
+} as any)
+const AppLeadsLeadIdRoute = AppLeadsLeadIdRouteImport.update({
+  id: '/$leadId',
+  path: '/$leadId',
+  getParentRoute: () => AppLeadsRoute,
+} as any)
+const AppMeetingsIndexRoute = AppMeetingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppMeetingsRoute,
+} as any)
+const AppMeetingsMeetingIdRoute = AppMeetingsMeetingIdRouteImport.update({
+  id: '/$meetingId',
+  path: '/$meetingId',
+  getParentRoute: () => AppMeetingsRoute,
+} as any)
+const AppOnboardingIndexRoute = AppOnboardingIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOnboardingRoute,
+} as any)
+const AppOnboardingOnboardingIdRoute =
+  AppOnboardingOnboardingIdRouteImport.update({
+    id: '/$onboardingId',
+    path: '/$onboardingId',
+    getParentRoute: () => AppOnboardingRoute,
+  } as any)
 const AppProjectsIndexRoute = AppProjectsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -158,17 +225,28 @@ export interface FileRoutesByFullPath {
   '/chat': typeof AppChatRoute
   '/employees': typeof AppEmployeesRouteWithChildren
   '/files': typeof AppFilesRoute
+  '/finance': typeof AppFinanceRoute
   '/inbox': typeof AppInboxRoute
+  '/leads': typeof AppLeadsRouteWithChildren
+  '/meetings': typeof AppMeetingsRouteWithChildren
   '/my-work': typeof AppMyWorkRoute
+  '/onboarding': typeof AppOnboardingRouteWithChildren
   '/projects': typeof AppProjectsRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/teams': typeof AppTeamsRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/employees/$employeeId': typeof AppEmployeesEmployeeIdRoute
+  '/leads/$leadId': typeof AppLeadsLeadIdRoute
+  '/meetings/$meetingId': typeof AppMeetingsMeetingIdRoute
+  '/onboarding/$onboardingId': typeof AppOnboardingOnboardingIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/employees/': typeof AppEmployeesIndexRoute
+  '/leads/': typeof AppLeadsIndexRoute
+  '/meetings/': typeof AppMeetingsIndexRoute
+  '/onboarding/': typeof AppOnboardingIndexRoute
   '/projects/': typeof AppProjectsIndexRoute
   '/tasks/': typeof AppTasksIndexRoute
 }
@@ -180,16 +258,24 @@ export interface FileRoutesByTo {
   '/calendar': typeof AppCalendarRoute
   '/chat': typeof AppChatRoute
   '/files': typeof AppFilesRoute
+  '/finance': typeof AppFinanceRoute
   '/inbox': typeof AppInboxRoute
   '/my-work': typeof AppMyWorkRoute
   '/settings': typeof AppSettingsRoute
   '/teams': typeof AppTeamsRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/': typeof AppIndexRoute
   '/employees/$employeeId': typeof AppEmployeesEmployeeIdRoute
+  '/leads/$leadId': typeof AppLeadsLeadIdRoute
+  '/meetings/$meetingId': typeof AppMeetingsMeetingIdRoute
+  '/onboarding/$onboardingId': typeof AppOnboardingOnboardingIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/employees': typeof AppEmployeesIndexRoute
+  '/leads': typeof AppLeadsIndexRoute
+  '/meetings': typeof AppMeetingsIndexRoute
+  '/onboarding': typeof AppOnboardingIndexRoute
   '/projects': typeof AppProjectsIndexRoute
   '/tasks': typeof AppTasksIndexRoute
 }
@@ -204,18 +290,29 @@ export interface FileRoutesById {
   '/_app/chat': typeof AppChatRoute
   '/_app/employees': typeof AppEmployeesRouteWithChildren
   '/_app/files': typeof AppFilesRoute
+  '/_app/finance': typeof AppFinanceRoute
   '/_app/inbox': typeof AppInboxRoute
+  '/_app/leads': typeof AppLeadsRouteWithChildren
+  '/_app/meetings': typeof AppMeetingsRouteWithChildren
   '/_app/my-work': typeof AppMyWorkRoute
+  '/_app/onboarding': typeof AppOnboardingRouteWithChildren
   '/_app/projects': typeof AppProjectsRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/tasks': typeof AppTasksRouteWithChildren
   '/_app/teams': typeof AppTeamsRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/employees/$employeeId': typeof AppEmployeesEmployeeIdRoute
+  '/_app/leads/$leadId': typeof AppLeadsLeadIdRoute
+  '/_app/meetings/$meetingId': typeof AppMeetingsMeetingIdRoute
+  '/_app/onboarding/$onboardingId': typeof AppOnboardingOnboardingIdRoute
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_app/employees/': typeof AppEmployeesIndexRoute
+  '/_app/leads/': typeof AppLeadsIndexRoute
+  '/_app/meetings/': typeof AppMeetingsIndexRoute
+  '/_app/onboarding/': typeof AppOnboardingIndexRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
   '/_app/tasks/': typeof AppTasksIndexRoute
 }
@@ -231,17 +328,28 @@ export interface FileRouteTypes {
     | '/chat'
     | '/employees'
     | '/files'
+    | '/finance'
     | '/inbox'
+    | '/leads'
+    | '/meetings'
     | '/my-work'
+    | '/onboarding'
     | '/projects'
     | '/settings'
     | '/tasks'
     | '/teams'
+    | '/invite/$token'
     | '/employees/$employeeId'
+    | '/leads/$leadId'
+    | '/meetings/$meetingId'
+    | '/onboarding/$onboardingId'
     | '/projects/$projectId'
     | '/tasks/$taskId'
     | '/api/auth/$'
     | '/employees/'
+    | '/leads/'
+    | '/meetings/'
+    | '/onboarding/'
     | '/projects/'
     | '/tasks/'
   fileRoutesByTo: FileRoutesByTo
@@ -253,16 +361,24 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/chat'
     | '/files'
+    | '/finance'
     | '/inbox'
     | '/my-work'
     | '/settings'
     | '/teams'
+    | '/invite/$token'
     | '/'
     | '/employees/$employeeId'
+    | '/leads/$leadId'
+    | '/meetings/$meetingId'
+    | '/onboarding/$onboardingId'
     | '/projects/$projectId'
     | '/tasks/$taskId'
     | '/api/auth/$'
     | '/employees'
+    | '/leads'
+    | '/meetings'
+    | '/onboarding'
     | '/projects'
     | '/tasks'
   id:
@@ -276,18 +392,29 @@ export interface FileRouteTypes {
     | '/_app/chat'
     | '/_app/employees'
     | '/_app/files'
+    | '/_app/finance'
     | '/_app/inbox'
+    | '/_app/leads'
+    | '/_app/meetings'
     | '/_app/my-work'
+    | '/_app/onboarding'
     | '/_app/projects'
     | '/_app/settings'
     | '/_app/tasks'
     | '/_app/teams'
+    | '/invite/$token'
     | '/_app/'
     | '/_app/employees/$employeeId'
+    | '/_app/leads/$leadId'
+    | '/_app/meetings/$meetingId'
+    | '/_app/onboarding/$onboardingId'
     | '/_app/projects/$projectId'
     | '/_app/tasks/$taskId'
     | '/api/auth/$'
     | '/_app/employees/'
+    | '/_app/leads/'
+    | '/_app/meetings/'
+    | '/_app/onboarding/'
     | '/_app/projects/'
     | '/_app/tasks/'
   fileRoutesById: FileRoutesById
@@ -295,6 +422,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -370,6 +498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFilesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/finance': {
+      id: '/_app/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof AppFinanceRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/inbox': {
       id: '/_app/inbox'
       path: '/inbox'
@@ -377,11 +512,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/leads': {
+      id: '/_app/leads'
+      path: '/leads'
+      fullPath: '/leads'
+      preLoaderRoute: typeof AppLeadsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/meetings': {
+      id: '/_app/meetings'
+      path: '/meetings'
+      fullPath: '/meetings'
+      preLoaderRoute: typeof AppMeetingsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/my-work': {
       id: '/_app/my-work'
       path: '/my-work'
       fullPath: '/my-work'
       preLoaderRoute: typeof AppMyWorkRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/onboarding': {
+      id: '/_app/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/projects': {
@@ -412,6 +568,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTeamsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/employees/': {
       id: '/_app/employees/'
       path: '/'
@@ -425,6 +588,48 @@ declare module '@tanstack/react-router' {
       fullPath: '/employees/$employeeId'
       preLoaderRoute: typeof AppEmployeesEmployeeIdRouteImport
       parentRoute: typeof AppEmployeesRoute
+    }
+    '/_app/leads/': {
+      id: '/_app/leads/'
+      path: '/'
+      fullPath: '/leads/'
+      preLoaderRoute: typeof AppLeadsIndexRouteImport
+      parentRoute: typeof AppLeadsRoute
+    }
+    '/_app/leads/$leadId': {
+      id: '/_app/leads/$leadId'
+      path: '/$leadId'
+      fullPath: '/leads/$leadId'
+      preLoaderRoute: typeof AppLeadsLeadIdRouteImport
+      parentRoute: typeof AppLeadsRoute
+    }
+    '/_app/meetings/': {
+      id: '/_app/meetings/'
+      path: '/'
+      fullPath: '/meetings/'
+      preLoaderRoute: typeof AppMeetingsIndexRouteImport
+      parentRoute: typeof AppMeetingsRoute
+    }
+    '/_app/meetings/$meetingId': {
+      id: '/_app/meetings/$meetingId'
+      path: '/$meetingId'
+      fullPath: '/meetings/$meetingId'
+      preLoaderRoute: typeof AppMeetingsMeetingIdRouteImport
+      parentRoute: typeof AppMeetingsRoute
+    }
+    '/_app/onboarding/': {
+      id: '/_app/onboarding/'
+      path: '/'
+      fullPath: '/onboarding/'
+      preLoaderRoute: typeof AppOnboardingIndexRouteImport
+      parentRoute: typeof AppOnboardingRoute
+    }
+    '/_app/onboarding/$onboardingId': {
+      id: '/_app/onboarding/$onboardingId'
+      path: '/$onboardingId'
+      fullPath: '/onboarding/$onboardingId'
+      preLoaderRoute: typeof AppOnboardingOnboardingIdRouteImport
+      parentRoute: typeof AppOnboardingRoute
     }
     '/_app/projects/': {
       id: '/_app/projects/'
@@ -478,6 +683,48 @@ const AppEmployeesRouteWithChildren = AppEmployeesRoute._addFileChildren(
   AppEmployeesRouteChildren,
 )
 
+interface AppLeadsRouteChildren {
+  AppLeadsLeadIdRoute: typeof AppLeadsLeadIdRoute
+  AppLeadsIndexRoute: typeof AppLeadsIndexRoute
+}
+
+const AppLeadsRouteChildren: AppLeadsRouteChildren = {
+  AppLeadsLeadIdRoute: AppLeadsLeadIdRoute,
+  AppLeadsIndexRoute: AppLeadsIndexRoute,
+}
+
+const AppLeadsRouteWithChildren = AppLeadsRoute._addFileChildren(
+  AppLeadsRouteChildren,
+)
+
+interface AppMeetingsRouteChildren {
+  AppMeetingsMeetingIdRoute: typeof AppMeetingsMeetingIdRoute
+  AppMeetingsIndexRoute: typeof AppMeetingsIndexRoute
+}
+
+const AppMeetingsRouteChildren: AppMeetingsRouteChildren = {
+  AppMeetingsMeetingIdRoute: AppMeetingsMeetingIdRoute,
+  AppMeetingsIndexRoute: AppMeetingsIndexRoute,
+}
+
+const AppMeetingsRouteWithChildren = AppMeetingsRoute._addFileChildren(
+  AppMeetingsRouteChildren,
+)
+
+interface AppOnboardingRouteChildren {
+  AppOnboardingOnboardingIdRoute: typeof AppOnboardingOnboardingIdRoute
+  AppOnboardingIndexRoute: typeof AppOnboardingIndexRoute
+}
+
+const AppOnboardingRouteChildren: AppOnboardingRouteChildren = {
+  AppOnboardingOnboardingIdRoute: AppOnboardingOnboardingIdRoute,
+  AppOnboardingIndexRoute: AppOnboardingIndexRoute,
+}
+
+const AppOnboardingRouteWithChildren = AppOnboardingRoute._addFileChildren(
+  AppOnboardingRouteChildren,
+)
+
 interface AppProjectsRouteChildren {
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
@@ -514,8 +761,12 @@ interface AppRouteChildren {
   AppChatRoute: typeof AppChatRoute
   AppEmployeesRoute: typeof AppEmployeesRouteWithChildren
   AppFilesRoute: typeof AppFilesRoute
+  AppFinanceRoute: typeof AppFinanceRoute
   AppInboxRoute: typeof AppInboxRoute
+  AppLeadsRoute: typeof AppLeadsRouteWithChildren
+  AppMeetingsRoute: typeof AppMeetingsRouteWithChildren
   AppMyWorkRoute: typeof AppMyWorkRoute
+  AppOnboardingRoute: typeof AppOnboardingRouteWithChildren
   AppProjectsRoute: typeof AppProjectsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppTasksRoute: typeof AppTasksRouteWithChildren
@@ -531,8 +782,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppChatRoute: AppChatRoute,
   AppEmployeesRoute: AppEmployeesRouteWithChildren,
   AppFilesRoute: AppFilesRoute,
+  AppFinanceRoute: AppFinanceRoute,
   AppInboxRoute: AppInboxRoute,
+  AppLeadsRoute: AppLeadsRouteWithChildren,
+  AppMeetingsRoute: AppMeetingsRouteWithChildren,
   AppMyWorkRoute: AppMyWorkRoute,
+  AppOnboardingRoute: AppOnboardingRouteWithChildren,
   AppProjectsRoute: AppProjectsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppTasksRoute: AppTasksRouteWithChildren,
@@ -545,6 +800,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  InviteTokenRoute: InviteTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

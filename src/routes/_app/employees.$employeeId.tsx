@@ -1,22 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { EmptyState, PageHeader, PriorityBadge, StatCard, StatusBadge, Surface, TaskRow } from "@/components/marks";
 import { Button } from "@/components/ui/button";
 import { PersonAvatar, ProgressRail, Skeleton } from "@/components/ui/display";
 import { useWorkspace } from "@/components/workspace";
-import { openDirectMessage, getEmployee } from "@/lib/server/fns";
-import { EMPLOYMENT_LABEL, ROLE_LABEL } from "@/lib/types";
+import { openDirectMessage, getEmployee, getProfileOnboarding, startOnboarding } from "@/lib/server/fns";
+import { EMPLOYMENT_LABEL, ONBOARDING_STATUS_LABEL, ROLE_LABEL } from "@/lib/types";
 import { formatHours, formatShortDate, relativeTime } from "@/lib/utils";
 import { EnrollEmployeeDialog } from "@/components/enroll-employee";
-import { canEnroll, canModifyPerson } from "@/lib/permissions";
-import { useMutation } from "@tanstack/react-query";
+import { MeetButton } from "@/components/meet-dialog";
+import { canEnroll, canModifyPerson, canStartMeeting, hasPerm, isExecOffice } from "@/lib/permissions";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/employees/$employeeId")({ component: EmployeeProfilePage });
 
-const TABS = ["Overview", "Tasks", "Projects", "Activity", "Files", "Messages", "Work Summary"] as const;
+const TABS = ["Overview", "Work", "Projects", "Tasks", "Files", "Messages", "Meetings", "Onboarding", "Activity"] as const;
 
 function EmployeeProfilePage() {
   const { employeeId } = Route.useParams();
@@ -26,10 +26,24 @@ function EmployeeProfilePage() {
     queryKey: ["employee", employeeId],
     queryFn: () => getEmployee({ data: employeeId }),
   });
+  const onboard = useQuery({
+    queryKey: ["profile-onboarding", employeeId],
+    queryFn: () => getProfileOnboarding({ data: employeeId }),
+  });
+  const qc = useQueryClient();
   const navigate = useNavigate();
   const dm = useMutation({
     mutationFn: () => openDirectMessage({ data: employeeId }),
     onSuccess: (r) => void navigate({ to: "/chat", search: { channel: r.id } }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const startBoard = useMutation({
+    mutationFn: () => startOnboarding({ data: employeeId }),
+    onSuccess: async (r) => {
+      toast.success("Executive onboarding opened");
+      await qc.invalidateQueries();
+      await navigate({ to: "/onboarding/$onboardingId", params: { onboardingId: r.id } });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -41,7 +55,6 @@ function EmployeeProfilePage() {
   const lead = members.find((m) => m.id === profile.teamLeadId);
   const dept = departments.find((d) => d.id === profile.departmentId);
   const team = teams.find((t) => t.id === profile.teamId);
-  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -55,6 +68,9 @@ function EmployeeProfilePage() {
               <Button variant="secondary" size="sm" onClick={() => dm.mutate()} disabled={dm.isPending}>
                 Message
               </Button>
+            ) : null}
+            {profile.id !== me.id && canStartMeeting(me.role, "direct") ? (
+              <MeetButton label="Start meeting" defaultScope="direct" profileIds={[profile.id]} title={`Meet ${profile.displayName}`} />
             ) : null}
             {canEnroll(me.role) || profile.id === me.id || canModifyPerson(me.role, profile.role) ? (
               <EnrollEmployeeDialog person={profile}>
@@ -218,7 +234,7 @@ function EmployeeProfilePage() {
             </Surface>
           ) : null}
 
-          {tab === "Work Summary" ? (
+          {tab === "Work" ? (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-3">
                 <StatCard label="Assigned" value={summary.total} />
@@ -238,23 +254,67 @@ function EmployeeProfilePage() {
                   ))}
                 </ul>
               </Surface>
-              <Surface className="p-5">
-                <h2 className="font-display text-sm font-semibold">Due vs done</h2>
-                <div className="mt-3 space-y-2">
-                  {tasks.slice(0, 8).map((t) => (
-                    <div key={t.id} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate">{t.title}</span>
-                      <span className="flex items-center gap-2">
-                        <StatusBadge status={t.status} />
-                        <span className="text-xs text-muted-foreground">
-                          {t.dueDate && t.dueDate < today && t.status !== "completed" ? "overdue" : formatShortDate(t.dueDate)}
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </Surface>
             </div>
+          ) : null}
+
+          {tab === "Meetings" ? (
+            <Surface className="p-6">
+              <p className="text-sm text-muted-foreground">Start a direct meeting with {profile.displayName.split(" ")[0]} from this profile.</p>
+              {profile.id !== me.id && canStartMeeting(me.role, "direct") ? (
+                <div className="mt-4">
+                  <MeetButton label="Start meeting" defaultScope="direct" profileIds={[profile.id]} title={`Meet ${profile.displayName}`} />
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">Open Meetings to see calls you both belong to.</p>
+              )}
+            </Surface>
+          ) : null}
+
+          {tab === "Onboarding" ? (
+            <Surface className="p-5">
+              {onboard.data ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {ONBOARDING_STATUS_LABEL[onboard.data.status]} · {onboard.data.stepDone}/{onboard.data.stepTotal} steps
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Desk: {onboard.data.ownerName ?? "Unassigned"} · due {formatShortDate(onboard.data.dueAt)}
+                      </p>
+                    </div>
+                    <Link to="/onboarding/$onboardingId" params={{ onboardingId: onboard.data.id }}>
+                      <Button size="sm" variant="secondary">
+                        Open desk
+                      </Button>
+                    </Link>
+                  </div>
+                  <ProgressRail value={onboard.data.progress} />
+                  <ul className="divide-y divide-border">
+                    {onboard.data.steps.map((s) => (
+                      <li key={s.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                        <span className={s.done ? "text-muted-foreground line-through" : ""}>{s.title}</span>
+                        <span className="text-xs text-muted-foreground">{s.done ? "Done" : "Open"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : profile.role === "founder" || profile.role === "executive_assistant" ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">No first-week checklist yet for this executive.</p>
+                  {hasPerm(me.role, "onboarding.manage") ? (
+                    <Button className="mt-4" size="sm" onClick={() => startBoard.mutate()} disabled={startBoard.isPending}>
+                      Start onboarding
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Executive onboarding is for founders and the executive assistant.{" "}
+                  {isExecOffice(me.role) ? "Enroll them from Employees to open a desk." : "Ask the office to enroll leadership."}
+                </p>
+              )}
+            </Surface>
           ) : null}
         </div>
       </div>

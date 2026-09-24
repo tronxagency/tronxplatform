@@ -1,11 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { assignableRoles, allowedTaskStatuses, canManageWork, canModifyPerson, hasPerm } from "@/lib/permissions";
+import { assignableRoles, allowedTaskStatuses, canManageWork, canModifyPerson, hasPerm, isExecOffice } from "@/lib/permissions";
 import type {
+  Accent,
+  Appearance,
   AuditItem,
   DashboardPayload,
+  Density,
+  Meeting,
+  ProjectMemberRole,
   SearchHit,
   TaskStatus,
+  ThemeMode,
   WorkspacePayload,
 } from "@/lib/types";
 import { nid, toIso } from "@/lib/utils";
@@ -29,14 +35,23 @@ import {
   mapTime,
   TASK_SELECT,
 } from "./map";
+import { ensureCommercialSeed, commercialBrief, countOverdueFollowUps } from "./commercial";
+import { mapMeeting } from "./meetings";
+import { countOpenOnboardings, ensureOpenOnboardings, listOpenOnboardingSummaries, markWorkspaceLogin } from "./onboarding";
 
 export * from "./people";
+export * from "./meetings";
+export * from "./onboarding";
+export * from "./commercial";
 
 
 export const getWorkspace = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<WorkspacePayload> => {
     const { sql, me, org } = await ensureActor(context.userId);
+    await ensureOpenOnboardings(sql, org.id, me.id);
+    await markWorkspaceLogin(sql, org.id, me.id);
+    await ensureCommercialSeed(sql, org.id, me.id);
     const members = (await sql`select * from profiles where org_id = ${org.id} order by display_name`).map(mapProfile);
     const teamsRaw = await sql`select * from teams where org_id = ${org.id} order by name`;
     const tm = await sql<{ team_id: string; profile_id: string }>`select team_id, profile_id from team_members tm join teams t on t.id = tm.team_id where t.org_id = ${org.id}`;
@@ -57,6 +72,20 @@ export const getWorkspace = createServerFn({ method: "GET" })
       group by assignee_id`;
     const openTasksByProfile: Record<string, number> = {};
     for (const r of loadRows) openTasksByProfile[r.assignee_id] = Number(r.c);
+    const prefRows = await sql<{ theme: string; accent: string; density: string }>`
+      select theme, accent, density from user_preferences where profile_id = ${me.id}`;
+    const pref = prefRows[0];
+    const appearance: Appearance = {
+      theme: (["light", "dark", "system"].includes(pref?.theme ?? "") ? pref!.theme : "dark") as ThemeMode,
+      accent: (["teal", "ink", "dusk", "sand"].includes(pref?.accent ?? "") ? pref!.accent : "teal") as Accent,
+      density: (pref?.density === "compact" ? "compact" : "comfortable") as Density,
+    };
+    const liveMeetings = await sql<{ c: number }>`
+      select count(*)::int as c from meetings m
+      join meeting_participants mp on mp.meeting_id = m.id
+      where m.org_id = ${org.id} and mp.profile_id = ${me.id} and m.status = ${"live"}`;
+    const openOnboardingCount = await countOpenOnboardings(sql, org.id, me.id, me.role);
+    const overdueFollowUps = hasPerm(me.role, "lead.view") ? await countOverdueFollowUps(sql, org.id) : 0;
     return {
       org,
       me,
@@ -67,6 +96,10 @@ export const getWorkspace = createServerFn({ method: "GET" })
       unreadNotifications: unreadRows[0]?.c ?? 0,
       runningTimer: running[0] ? mapTime(running[0]) : null,
       openTasksByProfile,
+      appearance,
+      liveMeetingCount: liveMeetings[0]?.c ?? 0,
+      openOnboardingCount,
+      overdueFollowUps,
     };
   });
 
@@ -74,6 +107,7 @@ export const getDashboard = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<DashboardPayload> => {
     const { sql, me, org } = await ensureActor(context.userId);
+    await ensureCommercialSeed(sql, org.id, me.id);
     const today = new Date().toISOString().slice(0, 10);
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
     const visible = await visibleProfileIds(sql, org.id, me);
@@ -108,9 +142,11 @@ export const getDashboard = createServerFn({ method: "GET" })
     const myCompleted = await sql<{ c: number }>`select count(*)::int as c from tasks where assignee_id = ${me.id} and parent_id is null and status = ${"completed"}`;
 
     const projects = await sql`
-      select p.id, p.name, p.color_key,
+      select p.id, p.name, p.color_key, p.status, p.due_date,
         (select count(*)::int from tasks t where t.project_id = p.id and t.parent_id is null) as task_total,
-        (select count(*)::int from tasks t where t.project_id = p.id and t.parent_id is null and t.status = 'completed') as task_done
+        (select count(*)::int from tasks t where t.project_id = p.id and t.parent_id is null and t.status = 'completed') as task_done,
+        (select count(*)::int from tasks t where t.project_id = p.id and t.parent_id is null and (t.blocked = true or t.status = 'blocked')) as blocked_count,
+        (select count(*)::int from tasks t where t.project_id = p.id and t.parent_id is null and t.status != 'completed' and t.due_date is not null and t.due_date < ${today}) as overdue_count
       from projects p where p.org_id = ${org.id} order by p.name`;
 
     const todayTasks = (
@@ -146,6 +182,73 @@ export const getDashboard = createServerFn({ method: "GET" })
       where p.org_id = ${org.id} and m.status = 'open' and m.due_date is not null and m.due_date >= ${today}
       order by m.due_date limit 4`;
 
+    const invitedEmployees = await sql<{ c: number }>`select count(*)::int as c from profiles where org_id = ${org.id} and status = ${"invited"}`;
+    const pendingReview = await sql.query<{ c: number }>(
+      `select count(*)::int as c from tasks where org_id = $1 and parent_id is null and status = 'in_review'${visible ? " and assignee_id = any($2::text[])" : ""}`,
+      visible ? [org.id, visible] : [org.id],
+    );
+    const meetingRows = await sql`
+      select m.* from meetings m
+      join meeting_participants mp on mp.meeting_id = m.id
+      where m.org_id = ${org.id} and mp.profile_id = ${me.id}
+        and m.status != ${"cancelled"}
+        and m.starts_at::date = ${today}::date
+      order by m.starts_at`;
+    const meetingIds = meetingRows.map((r) => String(r.id));
+    const meetingParts = meetingIds.length
+      ? await sql.query<{ meeting_id: string; profile_id: string }>(
+          `select meeting_id, profile_id from meeting_participants where meeting_id = any($1::text[])`,
+          [meetingIds],
+        )
+      : [];
+    const meetingBy = new Map<string, string[]>();
+    for (const p of meetingParts) {
+      const list = meetingBy.get(p.meeting_id) ?? [];
+      list.push(p.profile_id);
+      meetingBy.set(p.meeting_id, list);
+    }
+    const meetingsToday: Meeting[] = meetingRows.map((r) => mapMeeting(r, meetingBy.get(String(r.id)) ?? []));
+
+    const projectProgress = projects.map((p) => {
+      const total = Number(p.task_total ?? 0);
+      const done = Number(p.task_done ?? 0);
+      return {
+        id: String(p.id),
+        name: String(p.name),
+        colorKey: String(p.color_key),
+        progress: total > 0 ? Math.round((done / total) * 100) : 0,
+        status: p.status ? String(p.status) : undefined,
+        dueDate: p.due_date ? String(p.due_date) : null,
+      };
+    });
+    const atRisk = projects
+      .filter((p) => String(p.status) === "active")
+      .flatMap((p) => {
+        const reasons: string[] = [];
+        if (Number(p.blocked_count ?? 0) > 0) reasons.push("blocked work");
+        if (Number(p.overdue_count ?? 0) > 0) reasons.push("overdue tasks");
+        if (p.due_date && String(p.due_date) < today) reasons.push("past deadline");
+        const total = Number(p.task_total ?? 0);
+        const done = Number(p.task_done ?? 0);
+        const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+        if (p.due_date && String(p.due_date) <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) && progress < 40) {
+          reasons.push("low progress");
+        }
+        if (reasons.length === 0) return [];
+        return [{ id: String(p.id), name: String(p.name), reason: reasons.join(" · ") }];
+      })
+      .slice(0, 6);
+
+    const invited = invitedEmployees[0]?.c ?? 0;
+    const dueTodayCount = dueToday[0]?.c ?? 0;
+    const overdueCount = overdue[0]?.c ?? 0;
+    const blockedCount = blocked[0]?.c ?? 0;
+    const openBoards = await listOpenOnboardingSummaries(sql, org.id);
+    const commercial =
+      hasPerm(me.role, "lead.view") || hasPerm(me.role, "finance.view")
+        ? await commercialBrief(sql, org.id)
+        : null;
+
     return {
       stats: {
         totalEmployees: employees[0]?.c ?? 0,
@@ -155,24 +258,18 @@ export const getDashboard = createServerFn({ method: "GET" })
         totalTasks: totalTasks[0]?.c ?? 0,
         completedTasks: completedTasks[0]?.c ?? 0,
         pendingTasks: pendingTasks[0]?.c ?? 0,
-        overdue: overdue[0]?.c ?? 0,
-        blocked: blocked[0]?.c ?? 0,
-        dueToday: dueToday[0]?.c ?? 0,
+        overdue: overdueCount,
+        blocked: blockedCount,
+        dueToday: dueTodayCount,
         myActive: myActive[0]?.c ?? 0,
         myCompleted: myCompleted[0]?.c ?? 0,
         tasksThisWeek: tasksWeek[0]?.c ?? 0,
         completedThisWeek: completedWeek[0]?.c ?? 0,
+        invitedEmployees: invited,
+        meetingsToday: meetingsToday.length,
+        pendingReview: pendingReview[0]?.c ?? 0,
       },
-      projectProgress: projects.map((p) => {
-        const total = Number(p.task_total ?? 0);
-        const done = Number(p.task_done ?? 0);
-        return {
-          id: String(p.id),
-          name: String(p.name),
-          colorKey: String(p.color_key),
-          progress: total > 0 ? Math.round((done / total) * 100) : 0,
-        };
-      }),
+      projectProgress,
       todayTasks,
       overdueTasks,
       recentActivity,
@@ -186,10 +283,30 @@ export const getDashboard = createServerFn({ method: "GET" })
         overdue: Number(w.overdue),
       })),
       upcoming: [
-        ...upcomingTasks.map((t) => ({ id: t.id, title: t.title, dueDate: String(t.due_date), type: "task" as const })),
+        ...upcomingTasks.map((t) => ({ id: t.id, title: t.title, dueDate: String(t.due_date), type: "task" as const, href: `/tasks/${t.id}` })),
         ...upcomingMs.map((t) => ({ id: t.id, title: t.title, dueDate: String(t.due_date), type: "milestone" as const })),
+        ...meetingsToday.map((m) => ({
+          id: m.id,
+          title: m.title,
+          dueDate: m.startsAt.slice(0, 10),
+          type: "meeting" as const,
+          href: `/meetings/${m.id}`,
+        })),
       ].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 8),
       announcements: (await sql`select * from announcements where org_id = ${org.id} order by created_at desc limit 4`).map(mapAnnouncement),
+      brief: {
+        attentionProjects: atRisk.length,
+        dueToday: dueTodayCount,
+        overdue: overdueCount,
+        blocked: blockedCount,
+        invited,
+        meetingsToday: meetingsToday.length,
+      },
+      atRisk,
+      meetingsToday,
+      execOnboarding: isExecOffice(me.role) ? openBoards : [],
+      myOnboarding: openBoards.find((row) => row.profileId === me.id) ?? null,
+      commercial,
     };
   });
 
@@ -214,15 +331,20 @@ export const listProjects = createServerFn({ method: "GET" })
             [org.id, me.id],
           )
         : await sql.query(`select ${PROJECT_SELECT} from projects p where p.org_id = $1 order by p.name`, [org.id]);
-    const members = await sql<{ project_id: string; profile_id: string }>`
-      select project_id, profile_id from project_members pm join projects p on p.id = pm.project_id where p.org_id = ${org.id}`;
+    const members = await sql<{ project_id: string; profile_id: string; role: string }>`
+      select project_id, profile_id, role from project_members pm join projects p on p.id = pm.project_id where p.org_id = ${org.id}`;
     const map = new Map<string, string[]>();
+    const roles = new Map<string, Record<string, ProjectMemberRole>>();
     for (const m of members) {
       const list = map.get(m.project_id) ?? [];
       list.push(m.profile_id);
       map.set(m.project_id, list);
+      const by = roles.get(m.project_id) ?? {};
+      const role = (["owner", "manager", "lead", "member", "observer"].includes(m.role) ? m.role : "member") as ProjectMemberRole;
+      by[m.profile_id] = role;
+      roles.set(m.project_id, by);
     }
-    return rows.map((r) => mapProject(r, map.get(String(r.id)) ?? []));
+    return rows.map((r) => mapProject(r, map.get(String(r.id)) ?? [], roles.get(String(r.id)) ?? {}));
   });
 
 export const getProject = createServerFn({ method: "GET" })
@@ -232,8 +354,18 @@ export const getProject = createServerFn({ method: "GET" })
     const { sql, org } = await ensureActor(context.userId);
     const rows = await sql.query(`select ${PROJECT_SELECT} from projects p where p.id = $1 and p.org_id = $2`, [id, org.id]);
     if (!rows[0]) return null;
-    const memberRows = await sql<{ profile_id: string }>`select profile_id from project_members where project_id = ${id}`;
-    const project = mapProject(rows[0], memberRows.map((m) => m.profile_id));
+    const memberRows = await sql<{ profile_id: string; role: string }>`select profile_id, role from project_members where project_id = ${id}`;
+    const memberRoles: Record<string, ProjectMemberRole> = {};
+    for (const m of memberRows) {
+      memberRoles[m.profile_id] = (["owner", "manager", "lead", "member", "observer"].includes(m.role)
+        ? m.role
+        : "member") as ProjectMemberRole;
+    }
+    const project = mapProject(
+      rows[0],
+      memberRows.map((m) => m.profile_id),
+      memberRoles,
+    );
     const tasks = (await sql.query(`select ${TASK_SELECT} from tasks t where t.project_id = $1 and t.parent_id is null order by t.created_at`, [id])).map(mapTask);
     const milestones = (await sql`select * from milestones where project_id = ${id} order by due_date nulls last`).map(mapMilestone);
     const files = (await sql`select * from attachments where project_id = ${id} order by created_at desc`).map(mapAttachment);
@@ -253,7 +385,7 @@ export const createProject = createServerFn({ method: "POST" })
     if (!name) throw new Error("Name is required");
     await sql`insert into projects (id, org_id, name, description, owner_id, team_id, priority, due_date)
       values (${id}, ${org.id}, ${name}, ${data.description ?? ""}, ${me.id}, ${data.teamId ?? null}, ${data.priority ?? "medium"}, ${data.dueDate ?? null})`;
-    await sql`insert into project_members (project_id, profile_id) values (${id}, ${me.id})`;
+    await sql`insert into project_members (project_id, profile_id, role) values (${id}, ${me.id}, ${"owner"})`;
     const chId = nid("ch");
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "project";
     await sql`insert into channels (id, org_id, type, name, project_id) values (${chId}, ${org.id}, ${"project"}, ${slug}, ${id})`;
@@ -261,7 +393,7 @@ export const createProject = createServerFn({ method: "POST" })
     if (data.teamId) {
       const teamPeople = await sql<{ profile_id: string }>`select profile_id from team_members where team_id = ${data.teamId}`;
       for (const member of teamPeople) {
-        await sql`insert into project_members (project_id, profile_id) values (${id}, ${member.profile_id}) on conflict do nothing`;
+        await sql`insert into project_members (project_id, profile_id, role) values (${id}, ${member.profile_id}, ${"member"}) on conflict do nothing`;
         await sql`insert into channel_members (channel_id, profile_id) values (${chId}, ${member.profile_id}) on conflict do nothing`;
         if (member.profile_id !== me.id) {
           await notify(sql, org.id, member.profile_id, "project", "Added to a project", name, `/projects/${id}`);
@@ -773,10 +905,15 @@ export const listTimeEntries = createServerFn({ method: "GET" })
 export const listEvents = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { sql, org } = await ensureActor(context.userId);
+    const { sql, me, org } = await ensureActor(context.userId);
     const events = (await sql`select * from calendar_events where org_id = ${org.id} order by starts_at`).map(mapEvent);
     const tasks = await sql<{ id: string; title: string; due_date: string; project_id: string | null }>`
       select id, title, due_date, project_id from tasks where org_id = ${org.id} and parent_id is null and due_date is not null`;
+    const meetings = await sql`
+      select m.* from meetings m
+      join meeting_participants mp on mp.meeting_id = m.id
+      where m.org_id = ${org.id} and mp.profile_id = ${me.id} and m.status != ${"cancelled"}
+      order by m.starts_at`;
     return {
       events,
       deadlines: tasks.map((t) => ({
@@ -785,6 +922,7 @@ export const listEvents = createServerFn({ method: "GET" })
         date: String(t.due_date),
         projectId: t.project_id,
       })),
+      meetings: meetings.map((r) => mapMeeting(r)),
     };
   });
 
@@ -835,21 +973,62 @@ export const searchAll = createServerFn({ method: "GET" })
   .validator((q: string) => q)
   .middleware([authMiddleware])
   .handler(async ({ context, data: q }): Promise<SearchHit[]> => {
-    const { sql, org } = await ensureActor(context.userId);
+    const { sql, me, org } = await ensureActor(context.userId);
     const term = q.trim();
     if (term.length < 1) return [];
     const like = `%${term}%`;
     const hits: SearchHit[] = [];
-    const tasks = await sql`select id, title, status from tasks where org_id = ${org.id} and title ilike ${like} limit 8`;
-    for (const t of tasks) hits.push({ kind: "task", id: String(t.id), title: String(t.title), subtitle: String(t.status), href: `/tasks/${t.id}` });
-    const projects = await sql`select id, name, status from projects where org_id = ${org.id} and name ilike ${like} limit 5`;
-    for (const p of projects) hits.push({ kind: "project", id: String(p.id), title: String(p.name), subtitle: String(p.status), href: `/projects/${p.id}` });
-    const people = await sql`select id, display_name, title from profiles where org_id = ${org.id} and (display_name ilike ${like} or coalesce(email,'') ilike ${like} or coalesce(work_email,'') ilike ${like} or coalesce(employee_code,'') ilike ${like}) limit 5`;
+    const visible = await visibleProfileIds(sql, org.id, me);
+    const taskRows = visible
+      ? await sql.query(
+          `select id, title, status from tasks where org_id = $1 and title ilike $2 and (assignee_id = any($3::text[]) or creator_id = $4) limit 8`,
+          [org.id, like, visible, me.id],
+        )
+      : await sql`select id, title, status from tasks where org_id = ${org.id} and title ilike ${like} limit 8`;
+    for (const t of taskRows) hits.push({ kind: "task", id: String(t.id), title: String(t.title), subtitle: String(t.status), href: `/tasks/${t.id}` });
+    const projectRows =
+      me.role === "employee"
+        ? await sql.query(
+            `select id, name, status from projects p where p.org_id = $1 and p.name ilike $2 and (
+              p.owner_id = $3
+              or exists (select 1 from project_members pm where pm.project_id = p.id and pm.profile_id = $3)
+              or exists (select 1 from tasks t where t.project_id = p.id and t.assignee_id = $3)
+            ) limit 5`,
+            [org.id, like, me.id],
+          )
+        : await sql`select id, name, status from projects where org_id = ${org.id} and name ilike ${like} limit 5`;
+    for (const p of projectRows) hits.push({ kind: "project", id: String(p.id), title: String(p.name), subtitle: String(p.status), href: `/projects/${p.id}` });
+    const people = await sql`select id, display_name, title from profiles where org_id = ${org.id} and status != ${"disabled"} and (display_name ilike ${like} or coalesce(email,'') ilike ${like} or coalesce(work_email,'') ilike ${like} or coalesce(employee_code,'') ilike ${like}) limit 5`;
     for (const p of people) hits.push({ kind: "person", id: String(p.id), title: String(p.display_name), subtitle: String(p.title), href: `/employees/${p.id}` });
-    const files = await sql`select id, name from attachments where org_id = ${org.id} and name ilike ${like} limit 5`;
+    const files =
+      me.role === "employee"
+        ? await sql`select id, name from attachments where org_id = ${org.id} and name ilike ${like} and (
+            uploaded_by = ${me.id} or project_id in (select project_id from project_members where profile_id = ${me.id})
+          ) limit 5`
+        : await sql`select id, name from attachments where org_id = ${org.id} and name ilike ${like} limit 5`;
     for (const f of files) hits.push({ kind: "file", id: String(f.id), title: String(f.name), subtitle: "File", href: `/files` });
-    const messages = await sql`select id, body, channel_id from messages where channel_id in (select id from channels where org_id = ${org.id}) and body ilike ${like} limit 5`;
+    const messages = await sql`select id, body, channel_id from messages where channel_id in (select channel_id from channel_members where profile_id = ${me.id}) and body ilike ${like} limit 5`;
     for (const m of messages) hits.push({ kind: "message", id: String(m.id), title: String(m.body).slice(0, 80), subtitle: "Message", href: `/chat?channel=${m.channel_id}` });
+    const meetingRows = await sql`select m.id, m.title, m.status from meetings m
+      join meeting_participants mp on mp.meeting_id = m.id
+      where m.org_id = ${org.id} and mp.profile_id = ${me.id} and m.title ilike ${like} limit 5`;
+    for (const m of meetingRows) hits.push({ kind: "meeting", id: String(m.id), title: String(m.title), subtitle: String(m.status), href: `/meetings/${m.id}` });
+    if (hasPerm(me.role, "lead.view")) {
+      try {
+        const leadRows = await sql`select id, name, company, stage from leads where org_id = ${org.id} and (name ilike ${like} or company ilike ${like} or coalesce(email,'') ilike ${like} or coalesce(industry,'') ilike ${like}) limit 6`;
+        for (const l of leadRows) {
+          hits.push({
+            kind: "lead",
+            id: String(l.id),
+            title: String(l.name),
+            subtitle: `${l.company ?? ""} · ${l.stage ?? ""}`.trim(),
+            href: `/leads/${l.id}`,
+          });
+        }
+      } catch {
+        /* table may not exist yet */
+      }
+    }
     return hits;
   });
 
@@ -907,7 +1086,7 @@ export const inviteMember = createServerFn({ method: "POST" })
     const email = data.email.trim().toLowerCase();
     const name = data.name.trim();
     if (!email || !name) throw new Error("Name and email are required");
-    const role = (data.role ?? "employee") as "ceo" | "founder" | "manager" | "team_lead" | "employee";
+    const role = (data.role ?? "employee") as import("@/lib/types").Role;
     if (!assignableRoles(me.role).includes(role)) throw new Error("You cannot assign that role");
     const exists = await sql`select id from profiles where org_id = ${org.id} and (
       lower(coalesce(email,'')) = ${email} or lower(coalesce(work_email,'')) = ${email}
@@ -1009,3 +1188,72 @@ export const listActivity = createServerFn({ method: "GET" })
     const rows = await sql`select * from activity_logs where org_id = ${org.id} order by created_at desc limit 40`;
     return rows.map(mapActivity);
   });
+
+export const saveAppearance = createServerFn({ method: "POST" })
+  .validator((data: Appearance) => data)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const { sql, me } = await ensureActor(context.userId);
+    const theme: ThemeMode = ["light", "dark", "system"].includes(data.theme) ? data.theme : "dark";
+    const accent: Accent = ["teal", "ink", "dusk", "sand"].includes(data.accent) ? data.accent : "teal";
+    const density: Density = data.density === "compact" ? "compact" : "comfortable";
+    await sql`
+      insert into user_preferences (profile_id, theme, accent, density)
+      values (${me.id}, ${theme}, ${accent}, ${density})
+      on conflict (profile_id) do update set theme = ${theme}, accent = ${accent}, density = ${density}`;
+    return { ok: true, appearance: { theme, accent, density } satisfies Appearance };
+  });
+
+export const pingTyping = createServerFn({ method: "POST" })
+  .validator((channelId: string) => channelId)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: channelId }) => {
+    const { sql, me, org } = await ensureActor(context.userId);
+    const allowed = await sql`select 1 from channel_members cm join channels c on c.id = cm.channel_id where cm.channel_id = ${channelId} and cm.profile_id = ${me.id} and c.org_id = ${org.id}`;
+    if (!allowed[0]) throw new Error("Forbidden");
+    await sql`
+      insert into channel_typing (channel_id, profile_id, updated_at)
+      values (${channelId}, ${me.id}, now())
+      on conflict (channel_id, profile_id) do update set updated_at = now()`;
+    return { ok: true };
+  });
+
+export const getChannelPresence = createServerFn({ method: "GET" })
+  .validator((channelId: string) => channelId)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: channelId }) => {
+    const { sql, me, org } = await ensureActor(context.userId);
+    const allowed = await sql`select 1 from channel_members cm join channels c on c.id = cm.channel_id where cm.channel_id = ${channelId} and cm.profile_id = ${me.id} and c.org_id = ${org.id}`;
+    if (!allowed[0]) throw new Error("Forbidden");
+    const typing = await sql<{ profile_id: string }>`
+      select profile_id from channel_typing
+      where channel_id = ${channelId} and profile_id != ${me.id} and updated_at > now() - interval '8 seconds'`;
+    const reads = await sql<{ profile_id: string; last_read_at: string | null }>`
+      select profile_id, last_read_at from channel_members where channel_id = ${channelId}`;
+    const lastRead: Record<string, string | null> = {};
+    for (const r of reads) lastRead[r.profile_id] = r.last_read_at ? toIso(r.last_read_at) : null;
+    return { typingIds: typing.map((t) => t.profile_id), lastRead };
+  });
+
+export const createGroupChannel = createServerFn({ method: "POST" })
+  .validator((data: { name?: string; profileIds: string[] }) => data)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const { sql, me, org } = await ensureActor(context.userId);
+    const ids = [...new Set([me.id, ...data.profileIds.filter(Boolean)])];
+    if (ids.length < 3) throw new Error("A group needs at least two other people");
+    const people = await sql.query<{ id: string; display_name: string }>(
+      `select id, display_name from profiles where org_id = $1 and id = any($2::text[])`,
+      [org.id, ids],
+    );
+    const names = people.filter((p) => p.id !== me.id).map((p) => p.display_name);
+    const name = data.name?.trim() || names.slice(0, 3).join(", ");
+    const id = nid("ch");
+    await sql`insert into channels (id, org_id, type, name) values (${id}, ${org.id}, ${"group"}, ${name})`;
+    for (const pid of ids) {
+      await sql`insert into channel_members (channel_id, profile_id) values (${id}, ${pid}) on conflict do nothing`;
+    }
+    await writeActivity(sql, org.id, me.id, "channel", id, "created", `Started group ${name}`);
+    return { id };
+  });
+

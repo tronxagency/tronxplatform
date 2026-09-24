@@ -22,7 +22,7 @@ function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={role === "ceo" || role === "founder" ? "Company" : role === "manager" || role === "team_lead" ? "Team" : "Personal"}
+        eyebrow={role === "ceo" || role === "founder" || role === "executive_assistant" ? "Company" : role === "manager" || role === "team_lead" ? "Team" : "Personal"}
         title="Analytics"
         description="Transparent work metrics — completion, load and time. No surveillance."
       />

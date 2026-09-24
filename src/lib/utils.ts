@@ -38,6 +38,22 @@ export function formatHours(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
+export function formatInr(amount: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Math.round(amount));
+}
+
+export function formatInrCompact(amount: number): string {
+  const sign = amount < 0 ? "−" : "";
+  const abs = Math.abs(Math.round(amount));
+  if (abs >= 10_000_000) return `${sign}₹${(abs / 10_000_000).toFixed(abs >= 100_000_000 ? 0 : 1)} Cr`;
+  if (abs >= 100_000) return `${sign}₹${(abs / 100_000).toFixed(1)} L`;
+  return formatInr(amount);
+}
+
 export function formatShortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = iso.length <= 10 ? new Date(`${iso}T00:00:00`) : new Date(iso);

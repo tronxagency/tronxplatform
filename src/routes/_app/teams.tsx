@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader, Surface } from "@/components/marks";
+import { MeetButton } from "@/components/meet-dialog";
 import { Button } from "@/components/ui/button";
 import { PersonAvatar } from "@/components/ui/display";
 import { Input, Label, Select, Textarea } from "@/components/ui/forms";
@@ -107,6 +108,9 @@ function TeamsPage() {
                     ))}
                   </select>
                 ) : null}
+                <div className="mt-4 flex gap-2">
+                  <MeetButton label="Meet team" defaultScope="team" teamId={t.id} title={`${t.name} sync`} />
+                </div>
               </Surface>
             );
           })}

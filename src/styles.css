@@ -1,34 +1,131 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+:root {
+  color-scheme: light;
+  --tronx-background: #f4f3ef;
+  --tronx-foreground: #17161c;
+  --tronx-card: #fffcf7;
+  --tronx-card-foreground: #17161c;
+  --tronx-popover: #fffcf7;
+  --tronx-popover-foreground: #17161c;
+  --tronx-primary: #17161c;
+  --tronx-primary-foreground: #f4f3ef;
+  --tronx-secondary: #eceae4;
+  --tronx-secondary-foreground: #17161c;
+  --tronx-muted: #eceae4;
+  --tronx-muted-foreground: #6d6b66;
+  --tronx-accent: #e6e3db;
+  --tronx-accent-foreground: #17161c;
+  --tronx-border: rgb(23 22 28 / 0.1);
+  --tronx-input: rgb(23 22 28 / 0.12);
+  --tronx-ring: #2a7a6e;
+  --tronx-brand: #2a7a6e;
+  --tronx-brand-foreground: #f4f3ef;
+  --tronx-ok: #3f7a5e;
+  --tronx-warn: #9a7040;
+  --tronx-danger: #a35a5a;
+  --tronx-info: #4d6880;
+  --tronx-sidebar: #ebe8e0;
+  --tronx-sidebar-foreground: #17161c;
+  --tronx-destructive: #a35a5a;
+  --tronx-destructive-foreground: #f4f3ef;
+  --tronx-shadow-soft: 0 1px 0 rgb(23 22 28 / 0.04), 0 10px 28px rgb(23 22 28 / 0.06);
+}
+
+.dark {
+  color-scheme: dark;
+  --tronx-background: #0a0a0c;
+  --tronx-foreground: #f2f2f3;
+  --tronx-card: #121215;
+  --tronx-card-foreground: #f2f2f3;
+  --tronx-popover: #16161a;
+  --tronx-popover-foreground: #f2f2f3;
+  --tronx-primary: #f2f2f3;
+  --tronx-primary-foreground: #0a0a0c;
+  --tronx-secondary: #1a1a1f;
+  --tronx-secondary-foreground: #f2f2f3;
+  --tronx-muted: #1a1a1f;
+  --tronx-muted-foreground: #8b8b93;
+  --tronx-accent: #1e1e24;
+  --tronx-accent-foreground: #f2f2f3;
+  --tronx-border: rgb(242 242 243 / 0.08);
+  --tronx-input: rgb(242 242 243 / 0.1);
+  --tronx-ring: #7ec9bc;
+  --tronx-brand: #7ec9bc;
+  --tronx-brand-foreground: #0a0a0c;
+  --tronx-ok: #6f9e86;
+  --tronx-warn: #c4a56a;
+  --tronx-danger: #c47b7b;
+  --tronx-info: #7a97ad;
+  --tronx-sidebar: #0d0d10;
+  --tronx-sidebar-foreground: #f2f2f3;
+  --tronx-destructive: #c47b7b;
+  --tronx-destructive-foreground: #f2f2f3;
+  --tronx-shadow-soft: 0 1px 0 rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.28);
+}
+
+html[data-accent="teal"] {
+  --tronx-brand: #2a7a6e;
+  --tronx-ring: #2a7a6e;
+}
+html.dark[data-accent="teal"] {
+  --tronx-brand: #7ec9bc;
+  --tronx-ring: #7ec9bc;
+}
+html[data-accent="ink"] {
+  --tronx-brand: #3d4a6b;
+  --tronx-ring: #3d4a6b;
+}
+html.dark[data-accent="ink"] {
+  --tronx-brand: #9aa7c7;
+  --tronx-ring: #9aa7c7;
+}
+html[data-accent="dusk"] {
+  --tronx-brand: #4b6b8a;
+  --tronx-ring: #4b6b8a;
+}
+html.dark[data-accent="dusk"] {
+  --tronx-brand: #8eb0cc;
+  --tronx-ring: #8eb0cc;
+}
+html[data-accent="sand"] {
+  --tronx-brand: #8a6a45;
+  --tronx-ring: #8a6a45;
+}
+html.dark[data-accent="sand"] {
+  --tronx-brand: #c4a882;
+  --tronx-ring: #c4a882;
+}
+
 @theme {
-  --color-background: #0a0a0c;
-  --color-foreground: #f2f2f3;
-  --color-card: #121215;
-  --color-card-foreground: #f2f2f3;
-  --color-popover: #16161a;
-  --color-popover-foreground: #f2f2f3;
-  --color-primary: #f2f2f3;
-  --color-primary-foreground: #0a0a0c;
-  --color-secondary: #1a1a1f;
-  --color-secondary-foreground: #f2f2f3;
-  --color-muted: #1a1a1f;
-  --color-muted-foreground: #8b8b93;
-  --color-accent: #1e1e24;
-  --color-accent-foreground: #f2f2f3;
-  --color-border: rgb(242 242 243 / 0.08);
-  --color-input: rgb(242 242 243 / 0.1);
-  --color-ring: #7ec9bc;
-  --color-brand: #7ec9bc;
-  --color-brand-foreground: #0a0a0c;
-  --color-ok: #6f9e86;
-  --color-warn: #c4a56a;
-  --color-danger: #c47b7b;
-  --color-info: #7a97ad;
-  --color-sidebar: #0d0d10;
-  --color-sidebar-foreground: #f2f2f3;
-  --color-destructive: #c47b7b;
-  --color-destructive-foreground: #f2f2f3;
+  --color-background: var(--tronx-background);
+  --color-foreground: var(--tronx-foreground);
+  --color-card: var(--tronx-card);
+  --color-card-foreground: var(--tronx-card-foreground);
+  --color-popover: var(--tronx-popover);
+  --color-popover-foreground: var(--tronx-popover-foreground);
+  --color-primary: var(--tronx-primary);
+  --color-primary-foreground: var(--tronx-primary-foreground);
+  --color-secondary: var(--tronx-secondary);
+  --color-secondary-foreground: var(--tronx-secondary-foreground);
+  --color-muted: var(--tronx-muted);
+  --color-muted-foreground: var(--tronx-muted-foreground);
+  --color-accent: var(--tronx-accent);
+  --color-accent-foreground: var(--tronx-accent-foreground);
+  --color-border: var(--tronx-border);
+  --color-input: var(--tronx-input);
+  --color-ring: var(--tronx-ring);
+  --color-brand: var(--tronx-brand);
+  --color-brand-foreground: var(--tronx-brand-foreground);
+  --color-ok: var(--tronx-ok);
+  --color-warn: var(--tronx-warn);
+  --color-danger: var(--tronx-danger);
+  --color-info: var(--tronx-info);
+  --color-sidebar: var(--tronx-sidebar);
+  --color-sidebar-foreground: var(--tronx-sidebar-foreground);
+  --color-destructive: var(--tronx-destructive);
+  --color-destructive-foreground: var(--tronx-destructive-foreground);
 
   --font-sans: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
   --font-display: "Syne", "Plus Jakarta Sans", system-ui, sans-serif;
@@ -41,7 +138,7 @@
   --radius-xl: 24px;
   --radius: 12px;
 
-  --shadow-soft: 0 1px 0 rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.28);
+  --shadow-soft: var(--tronx-shadow-soft);
 
   --ease-out-smooth: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -52,7 +149,6 @@
   }
 
   html {
-    color-scheme: dark;
     background: var(--color-background);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -92,6 +188,16 @@
   select {
     outline: none;
   }
+}
+
+html[data-density="compact"] {
+  --radius: 10px;
+}
+html[data-density="compact"] body {
+  line-height: 1.4;
+}
+html[data-density="compact"] header {
+  height: 3rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

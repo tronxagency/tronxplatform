@@ -1,11 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { getSql, type Sql } from "@/lib/db";
 import {
   assignableRoles,
   canModifyPerson,
   hasPerm,
 } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
+import type { ProjectMemberRole, Role } from "@/lib/types";
 import { nid } from "@/lib/utils";
 import {
   ensureActor,
@@ -26,6 +27,7 @@ import {
   mapTime,
   TASK_SELECT,
 } from "./map";
+import { markWorkspaceLogin, startExecutiveOnboardingInternal } from "./onboarding";
 
 export type EnrollInput = {
   name: string;
@@ -104,20 +106,33 @@ export const enrollEmployee = createServerFn({ method: "POST" })
     }
     await writeAudit(sql, org.id, me.id, "employee.enrolled", "profile", id, `Enrolled ${name} as ${role}`);
     await writeActivity(sql, org.id, me.id, "employee", id, "enrolled", `Enrolled ${name}`);
+    const inviteId = nid("inv");
+    const token = `${nid("tok")}${nid("k").slice(2)}`;
+    const expires = new Date(Date.now() + 14 * 86400000).toISOString();
+    await sql`insert into invitations (id, org_id, profile_id, email, token, invited_by, expires_at)
+      values (${inviteId}, ${org.id}, ${id}, ${email}, ${token}, ${me.id}, ${expires})`;
     await notify(
       sql,
       org.id,
       id,
       "employee",
       "You're enrolled in TRONX",
-      `Welcome ${name}. Your employee ID is ${code}. Sign in with ${email} to open your portal.`,
-      "/",
+      `Welcome ${name}. Your employee ID is ${code}. Open your invitation to create a password.`,
+      `/invite/${token}`,
     );
-    const leaders = await sql<{ id: string }>`select id from profiles where org_id = ${org.id} and role in ('ceo','founder','manager') and id != ${me.id}`;
+    const leaders = await sql<{ id: string }>`select id from profiles where org_id = ${org.id} and role in ('ceo','founder','manager','executive_assistant') and id != ${me.id}`;
     for (const l of leaders) {
       await notify(sql, org.id, l.id, "employee", "New employee enrolled", `${name} joined as ${data.title || role}`, `/employees/${id}`);
     }
-    return { id, employeeCode: code };
+    let onboardingId: string | undefined;
+    if (role === "founder" || role === "executive_assistant") {
+      try {
+        onboardingId = (await startExecutiveOnboardingInternal(sql, org.id, me.id, id)) ?? undefined;
+      } catch {
+        /* onboarding table may not be applied yet */
+      }
+    }
+    return { id, employeeCode: code, inviteToken: token, onboardingId };
   });
 
 export const updateEmployee = createServerFn({ method: "POST" })
@@ -171,6 +186,9 @@ export const updateEmployee = createServerFn({ method: "POST" })
       await sql`insert into team_members (team_id, profile_id) values (${data.teamId}, ${data.id}) on conflict do nothing`;
     }
     await writeAudit(sql, org.id, me.id, "employee.updated", "profile", data.id, `Updated ${next.name}`);
+    if (data.role && (data.role === "founder" || data.role === "executive_assistant") && data.role !== targetRole) {
+      await startExecutiveOnboardingInternal(sql, org.id, me.id, data.id);
+    }
     return { ok: true };
   });
 
@@ -271,14 +289,16 @@ export const addTeamMember = createServerFn({ method: "POST" })
   });
 
 export const addProjectMember = createServerFn({ method: "POST" })
-  .validator((data: { projectId: string; profileId: string }) => data)
+  .validator((data: { projectId: string; profileId: string; role?: ProjectMemberRole }) => data)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const { sql, me, org } = await ensureActor(context.userId);
-    if (!hasPerm(me.role, "project.update")) throw new Error("Forbidden");
+    if (!hasPerm(me.role, "project.member.add") && !hasPerm(me.role, "project.update")) throw new Error("Forbidden");
     const project = await sql`select id, name from projects where id = ${data.projectId} and org_id = ${org.id}`;
     if (!project[0]) throw new Error("Not found");
-    await sql`insert into project_members (project_id, profile_id) values (${data.projectId}, ${data.profileId}) on conflict do nothing`;
+    const role: ProjectMemberRole = data.role ?? "member";
+    await sql`insert into project_members (project_id, profile_id, role) values (${data.projectId}, ${data.profileId}, ${role})
+      on conflict (project_id, profile_id) do update set role = ${role}`;
     const ch = await sql`select id from channels where project_id = ${data.projectId} limit 1`;
     if (ch[0]) {
       await sql`insert into channel_members (channel_id, profile_id) values (${ch[0].id as string}, ${data.profileId}) on conflict do nothing`;
@@ -294,6 +314,105 @@ export const addProjectMember = createServerFn({ method: "POST" })
     );
     await writeAudit(sql, org.id, me.id, "project.member", "project", data.projectId, `Added a member to ${project[0].name}`);
     return { ok: true };
+  });
+
+export const updateProjectMemberRole = createServerFn({ method: "POST" })
+  .validator((data: { projectId: string; profileId: string; role: ProjectMemberRole }) => data)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const { sql, me, org } = await ensureActor(context.userId);
+    if (!hasPerm(me.role, "project.update")) throw new Error("Forbidden");
+    const project = await sql`select id from projects where id = ${data.projectId} and org_id = ${org.id}`;
+    if (!project[0]) throw new Error("Not found");
+    await sql`update project_members set role = ${data.role} where project_id = ${data.projectId} and profile_id = ${data.profileId}`;
+    await writeAudit(sql, org.id, me.id, "project.member.role", "project", data.projectId, `Set project role to ${data.role}`);
+    return { ok: true };
+  });
+
+export const getInvitation = createServerFn({ method: "GET" })
+  .validator((token: string) => token)
+  .handler(async ({ data: token }) => {
+    const sql = await getSql();
+    const rows = await sql`
+      select i.id, i.email, i.token, i.accepted_at, i.expires_at, i.profile_id,
+        p.display_name, p.role, p.employee_code, p.status, o.name as org_name
+      from invitations i
+      join profiles p on p.id = i.profile_id
+      join organizations o on o.id = i.org_id
+      where i.token = ${token}
+      limit 1`;
+    if (!rows[0]) return null;
+    const expiresAt = String(rows[0].expires_at);
+    const expired = new Date(expiresAt).getTime() < Date.now();
+    const role = String(rows[0].role);
+    let onboardingId: string | null = null;
+    try {
+      const board = await sql`select id from executive_onboardings
+        where profile_id = ${String(rows[0].profile_id)} and status = ${"open"} limit 1`;
+      onboardingId = board[0] ? String(board[0].id) : null;
+    } catch {
+      /* migration pending */
+    }
+    return {
+      email: String(rows[0].email),
+      name: String(rows[0].display_name),
+      role,
+      employeeCode: rows[0].employee_code ? String(rows[0].employee_code) : null,
+      orgName: String(rows[0].org_name),
+      accepted: Boolean(rows[0].accepted_at),
+      expired,
+      status: String(rows[0].status),
+      onboardingId,
+      executive: role === "founder" || role === "executive_assistant",
+    };
+  });
+
+export const acceptInvitation = createServerFn({ method: "POST" })
+  .validator((token: string) => token)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: token }) => {
+    const { sql, me, org } = await ensureActor(context.userId);
+    const rows = await sql`select * from invitations where token = ${token} and org_id = ${org.id}`;
+    if (!rows[0]) throw new Error("Invitation not found");
+    if (rows[0].accepted_at) {
+      return { ok: true, onboardingId: await openOnboardingId(sql, String(rows[0].profile_id)) };
+    }
+    if (new Date(String(rows[0].expires_at)).getTime() < Date.now()) throw new Error("This invitation has expired");
+    const email = String(rows[0].email).toLowerCase();
+    const mine = (me.email ?? me.workEmail ?? "").toLowerCase();
+    if (mine && mine !== email) throw new Error("Sign in with the invited email to accept this invitation");
+    await sql`update invitations set accepted_at = now() where id = ${rows[0].id as string}`;
+    await sql`update profiles set status = ${"active"}, user_id = ${me.userId ?? me.id} where id = ${rows[0].profile_id as string}`;
+    const profileId = String(rows[0].profile_id);
+    await markWorkspaceLogin(sql, org.id, profileId);
+    return { ok: true, onboardingId: await openOnboardingId(sql, profileId) };
+  });
+
+async function openOnboardingId(sql: Sql, profileId: string) {
+  try {
+    const board = await sql`select id from executive_onboardings where profile_id = ${profileId} and status = ${"open"} limit 1`;
+    return board[0] ? String(board[0].id) : null;
+  } catch {
+    return null;
+  }
+}
+
+export const getEmployeeInvite = createServerFn({ method: "GET" })
+  .validator((profileId: string) => profileId)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: profileId }) => {
+    const { sql, me, org } = await ensureActor(context.userId);
+    if (!hasPerm(me.role, "employee.create")) throw new Error("Forbidden");
+    const rows = await sql`
+      select token, expires_at, accepted_at from invitations
+      where org_id = ${org.id} and profile_id = ${profileId}
+      order by created_at desc limit 1`;
+    if (!rows[0]) return null;
+    return {
+      token: String(rows[0].token),
+      expiresAt: String(rows[0].expires_at),
+      accepted: Boolean(rows[0].accepted_at),
+    };
   });
 
 export const createAnnouncement = createServerFn({ method: "POST" })

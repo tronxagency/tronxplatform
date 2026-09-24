@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { CreateTaskDialog } from "@/components/create-dialogs";
+import { MeetButton } from "@/components/meet-dialog";
 import { KanbanBoard } from "@/components/kanban";
 import { EmptyState, PageHeader, Surface, TaskRow } from "@/components/marks";
 import { Button } from "@/components/ui/button";
@@ -10,9 +11,9 @@ import { PersonAvatar, ProgressRail, Skeleton, Tabs, TabsContent, TabsList, Tabs
 import { Input, Label, Select, Textarea } from "@/components/ui/forms";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/overlay";
 import { useWorkspace } from "@/components/workspace";
-import { addProjectMember, getProject, updateProject } from "@/lib/server/fns";
+import { addProjectMember, getProject, listMeetings, updateProject, updateProjectMemberRole } from "@/lib/server/fns";
 import { hasPerm } from "@/lib/permissions";
-import { PROJECT_STATUSES, PRIORITIES, STATUS_LABEL, type TaskStatus } from "@/lib/types";
+import { PROJECT_STATUSES, PRIORITIES, STATUS_LABEL, type ProjectMemberRole, type TaskStatus } from "@/lib/types";
 import { formatShortDate, relativeTime } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/projects/$projectId")({
@@ -24,6 +25,16 @@ function ProjectDetailPage() {
   const { members, me } = useWorkspace();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["project", projectId], queryFn: () => getProject({ data: projectId }) });
+  const meetings = useQuery({ queryKey: ["meetings"], queryFn: () => listMeetings() });
+  const roleMut = useMutation({
+    mutationFn: (data: { profileId: string; role: ProjectMemberRole }) =>
+      updateProjectMemberRole({ data: { projectId, ...data } }),
+    onSuccess: async () => {
+      toast.success("Role updated");
+      await qc.invalidateQueries({ queryKey: ["project", projectId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const add = useMutation({
     mutationFn: (profileId: string) => addProjectMember({ data: { projectId, profileId } }),
     onSuccess: async () => {
@@ -64,6 +75,7 @@ function ProjectDetailPage() {
         actions={
           <div className="flex gap-2">
             {canUpdate ? <EditProjectDialog projectId={project.id} name={project.name} description={project.description} status={project.status} priority={project.priority} dueDate={project.dueDate} /> : null}
+            <MeetButton label="Meet project team" defaultScope="project" projectId={project.id} title={`${project.name} — sync`} />
             <CreateTaskDialog projectId={project.id}>
               <Button>Add task</Button>
             </CreateTaskDialog>
@@ -100,6 +112,7 @@ function ProjectDetailPage() {
           <TabsTrigger value="team">Team</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="meetings">Meetings</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
@@ -170,19 +183,36 @@ function ProjectDetailPage() {
               project.memberIds.map((id) => {
                 const person = members.find((m) => m.id === id);
                 if (!person) return null;
+                const memberRole = project.memberRoles?.[id] ?? "member";
                 return (
-                  <Link
-                    key={id}
-                    to="/employees/$employeeId"
-                    params={{ employeeId: id }}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/40"
-                  >
-                    <PersonAvatar person={person} />
-                    <div>
-                      <p className="text-sm">{person.displayName}</p>
-                      <p className="text-xs text-muted-foreground">{person.title}</p>
-                    </div>
-                  </Link>
+                  <div key={id} className="flex items-center gap-3 px-4 py-3">
+                    <Link
+                      to="/employees/$employeeId"
+                      params={{ employeeId: id }}
+                      className="flex min-w-0 flex-1 items-center gap-3 hover:underline"
+                    >
+                      <PersonAvatar person={person} />
+                      <div>
+                        <p className="text-sm">{person.displayName}</p>
+                        <p className="text-xs text-muted-foreground">{person.title}</p>
+                      </div>
+                    </Link>
+                    {canUpdate ? (
+                      <select
+                        className="h-8 rounded-lg border border-input bg-secondary px-2 text-xs"
+                        value={memberRole}
+                        onChange={(e) => roleMut.mutate({ profileId: id, role: e.target.value as ProjectMemberRole })}
+                      >
+                        {(["owner", "manager", "lead", "member", "observer"] as const).map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs capitalize text-muted-foreground">{memberRole}</span>
+                    )}
+                  </div>
                 );
               })
             )}
@@ -232,6 +262,24 @@ function ProjectDetailPage() {
               <p className="mt-3 text-sm text-muted-foreground">No channel yet.</p>
             )}
           </Surface>
+        </TabsContent>
+        <TabsContent value="meetings" className="mt-5">
+          <Surface className="divide-y divide-border">
+            {(meetings.data ?? [])
+              .filter((m) => m.projectId === project.id)
+              .map((m) => (
+                <Link key={m.id} to="/meetings/$meetingId" params={{ meetingId: m.id }} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-accent/40">
+                  <span>{m.title}</span>
+                  <span className="text-xs capitalize text-muted-foreground">{m.status}</span>
+                </Link>
+              ))}
+            {(meetings.data ?? []).filter((m) => m.projectId === project.id).length === 0 ? (
+              <p className="p-6 text-sm text-muted-foreground">No project meetings yet.</p>
+            ) : null}
+          </Surface>
+          <div className="mt-3">
+            <MeetButton label="Meet project team" defaultScope="project" projectId={project.id} title={`${project.name} — weekly sync`} />
+          </div>
         </TabsContent>
         <TabsContent value="activity" className="mt-5">
           {activity.length === 0 ? (

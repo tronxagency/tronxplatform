@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { addDays, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, startOfMonth, startOfWeek } from "date-fns";
 import { useMemo, useState } from "react";
 import { PageHeader, Surface } from "@/components/marks";
@@ -34,7 +34,14 @@ function CalendarPage() {
       map.set(key, list);
     };
     for (const e of q.data?.events ?? []) {
-      push(e.startsAt.slice(0, 10), { title: e.title, kind: "meeting" });
+      push(e.startsAt.slice(0, 10), {
+        title: e.title,
+        kind: e.type === "meeting" || e.meetingId ? "meeting" : e.type,
+        href: e.meetingId ? `/meetings/${e.meetingId}` : e.projectId ? `/projects/${e.projectId}` : undefined,
+      });
+    }
+    for (const m of q.data?.meetings ?? []) {
+      push(m.startsAt.slice(0, 10), { title: m.title, kind: "meeting", href: `/meetings/${m.id}` });
     }
     for (const d of q.data?.deadlines ?? []) {
       push(d.date, { title: d.title, kind: "deadline", href: `/tasks/${d.id}` });
@@ -42,7 +49,10 @@ function CalendarPage() {
     return map;
   }, [q.data]);
 
-  const todayMeetings = (q.data?.events ?? []).filter((e) => e.startsAt.slice(0, 10) === dayKey(new Date()));
+  const todayMeetings = [
+    ...(q.data?.events ?? []).filter((e) => e.startsAt.slice(0, 10) === dayKey(new Date())),
+    ...(q.data?.meetings ?? []).filter((e) => e.startsAt.slice(0, 10) === dayKey(new Date())),
+  ];
 
   return (
     <div className="space-y-6">
@@ -109,9 +119,9 @@ function CalendarPage() {
                     <div className="mt-1 space-y-1">
                       {items.slice(0, 3).map((it, i) =>
                         it.href ? (
-                          <Link key={i} to={it.href} className="block truncate rounded bg-accent px-1 text-[10px]">
+                          <a key={i} href={it.href} className="block truncate rounded bg-accent px-1 text-[10px]" onClick={(e) => e.stopPropagation()}>
                             {it.title}
-                          </Link>
+                          </a>
                         ) : (
                           <p key={i} className="truncate rounded bg-accent px-1 text-[10px]">
                             {it.title}
@@ -132,9 +142,16 @@ function CalendarPage() {
               ) : (
                 todayMeetings.map((e) => (
                   <li key={e.id} className="text-sm">
-                    <p>{e.title}</p>
+                    {"meetingId" in e && e.meetingId ? (
+                      <a href={`/meetings/${e.meetingId}`} className="hover:underline">{e.title}</a>
+                    ) : "scope" in e ? (
+                      <a href={`/meetings/${e.id}`} className="hover:underline">{e.title}</a>
+                    ) : (
+                      <p>{e.title}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
-                      {format(new Date(e.startsAt), "HH:mm")} – {format(new Date(e.endsAt), "HH:mm")}
+                      {format(new Date(e.startsAt), "HH:mm")}
+                      {"endsAt" in e && e.endsAt ? ` – ${format(new Date(e.endsAt), "HH:mm")}` : ""}
                     </p>
                   </li>
                 ))

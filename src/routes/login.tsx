@@ -11,8 +11,9 @@ export const Route = createFileRoute("/login")({ component: Login });
 function Login() {
   const { user, isPending } = useCurrentUserState();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const [mode, setMode] = useState<"in" | "up" | "reset">("in");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (!isPending && user) {
@@ -22,12 +23,22 @@ function Login() {
   async function onEmail(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setBusy(true);
     const fd = new FormData(e.currentTarget);
     const email = String(fd.get("email") ?? "");
     const password = String(fd.get("password") ?? "");
     const name = String(fd.get("name") ?? "");
     try {
+      if (mode === "reset") {
+        const res = await authClient.requestPasswordReset({
+          email,
+          redirectTo: "/login",
+        });
+        if (res.error) throw new Error(res.error.message || "Reset email is not configured");
+        setNotice("If that address exists, a reset link will be sent. In this workspace, mail delivery requires a configured provider.");
+        return;
+      }
       if (mode === "up") {
         const res = await authClient.signUp.email({ email, password, name });
         if (res.error) throw new Error(res.error.message || "Could not create account");
@@ -45,7 +56,7 @@ function Login() {
 
   return (
     <main className="relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgb(126_201_188/0.08),transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--color-brand)_18%,transparent),transparent_55%)]" />
       <div className="relative w-full max-w-md">
         <div className="mb-8 flex items-center gap-3">
           <LogoMark />
@@ -56,13 +67,15 @@ function Login() {
         </div>
         <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
           <h1 className="font-display text-2xl font-semibold tracking-tight">
-            {mode === "in" ? "Welcome back" : "Create your account"}
+            {mode === "in" ? "Welcome back" : mode === "up" ? "Create your account" : "Reset password"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The first account becomes CEO and opens TRONX. Everyone else must be enrolled first, then they sign in with that same email.
+            {mode === "reset"
+              ? "Enter the enrolled email. Reset mail only sends when a mail provider is configured on the auth server."
+              : "Sign in as Vides with videshthota889@gmail.com (Founder & CEO), or create an account with tronx.agency@gmail.com to claim the Founder seat. Everyone else must be enrolled first, then they sign in with that same email — or open their invitation link."}
           </p>
 
-          {authEnabled ? (
+          {authEnabled && mode !== "reset" ? (
             <div className="mt-6 space-y-2">
               {GROK_PROVIDERS.map((p) => (
                 <Button
@@ -76,36 +89,57 @@ function Login() {
                 </Button>
               ))}
             </div>
-          ) : (
+          ) : mode !== "reset" ? (
             <p className="mt-6 text-sm text-muted-foreground">Sign-in is disabled.</p>
-          )}
+          ) : null}
 
-          <div className="my-6 flex items-center gap-3 text-[11px] tracking-wide text-muted-foreground uppercase">
-            <span className="h-px flex-1 bg-border" />
-            Email
-            <span className="h-px flex-1 bg-border" />
-          </div>
+          {mode !== "reset" ? (
+            <div className="my-6 flex items-center gap-3 text-[11px] tracking-wide text-muted-foreground uppercase">
+              <span className="h-px flex-1 bg-border" />
+              Email
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          ) : (
+            <div className="mt-6" />
+          )}
 
           <form className="space-y-3" onSubmit={onEmail}>
             {mode === "up" ? (
               <div className="space-y-1.5">
                 <Label htmlFor="name">Name</Label>
-                <Input id="name" name="name" required placeholder="Videsh" autoComplete="name" />
+                <Input id="name" name="name" required placeholder="Vides" autoComplete="name" />
               </div>
             ) : null}
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required placeholder="you@tronx.dev" autoComplete="email" />
+              <Input id="email" name="email" type="email" required placeholder="videshthota889@gmail.com" autoComplete="email" />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required minLength={8} autoComplete={mode === "up" ? "new-password" : "current-password"} />
-            </div>
+            {mode !== "reset" ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input id="password" name="password" type="password" required minLength={8} autoComplete={mode === "up" ? "new-password" : "current-password"} />
+              </div>
+            ) : null}
             {error ? <p className="text-sm text-danger">{error}</p> : null}
+            {notice ? <p className="text-sm text-ok">{notice}</p> : null}
             <Button type="submit" className="w-full" disabled={busy || !authEnabled}>
-              {busy ? "Please wait…" : mode === "in" ? "Sign in" : "Create account"}
+              {busy ? "Please wait…" : mode === "in" ? "Sign in" : mode === "up" ? "Create account" : "Send reset link"}
             </Button>
           </form>
+
+          {mode === "in" ? (
+            <button
+              type="button"
+              className="mt-3 w-full text-center text-sm text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setMode("reset");
+                setError(null);
+                setNotice(null);
+              }}
+            >
+              Forgot password?
+            </button>
+          ) : null}
 
           <button
             type="button"
@@ -113,6 +147,7 @@ function Login() {
             onClick={() => {
               setMode(mode === "in" ? "up" : "in");
               setError(null);
+              setNotice(null);
             }}
           >
             {mode === "in" ? "Need an account? Create one" : "Already here? Sign in"}

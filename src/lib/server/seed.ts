@@ -1,5 +1,6 @@
 import type { Sql } from "@/lib/db";
 import { nid } from "@/lib/utils";
+import { FOUNDER } from "./owner";
 
 function day(offset: number): string {
   const d = new Date();
@@ -64,7 +65,7 @@ export async function seedOrganization(
     (${depHr}, ${orgId}, ${"HR"}, ${"People operations and enrollment."})`;
 
   const people: Person[] = [
-    { id: "seed_kiran", name: "Kiran Rao", title: "Founder & Director", role: "founder", avatar: "ink", email: "kiran@tronx.dev", code: "TX-1002", phone: "+91 98000 10002", location: "Bengaluru", skills: "strategy,product,partnerships", bio: "Co-builds the company agenda with the CEO. Protects focus." },
+    { id: "seed_kiran", name: "Kiran Rao", title: "Director, Finance & HR", role: "manager", avatar: "ink", email: "kiran@tronx.dev", code: "TX-1002", phone: "+91 98000 10002", location: "Bengaluru", skills: "strategy,product,partnerships", bio: "Runs finance and people ops alongside the Founder & CEO." },
     { id: "seed_maya", name: "Maya Shah", title: "Engineering Manager", role: "manager", avatar: "dusk", email: "maya@tronx.dev", code: "TX-1003", phone: "+91 98000 10003", location: "Bengaluru", skills: "engineering,delivery,mentoring", bio: "Runs software delivery across hospital, restaurant and estate." },
     { id: "seed_aisha", name: "Aisha Khan", title: "Product Manager", role: "manager", avatar: "pine", email: "aisha@tronx.dev", code: "TX-1004", phone: "+91 98000 10004", location: "Hyderabad", skills: "product,growth,analytics", bio: "Owns review automation and the real-estate pipeline." },
     { id: "seed_prakash", name: "Prakash", title: "Engineering Lead", role: "team_lead", avatar: "slate", email: "prakash@tronx.dev", code: "TX-1005", phone: "+91 98000 10005", location: "Bengaluru", skills: "backend,architecture,api", bio: "Leads the MERN team on hospital and restaurant platforms." },
@@ -76,6 +77,7 @@ export async function seedOrganization(
     { id: "seed_ravi", name: "Ravi", title: "Frontend Engineer", role: "employee", avatar: "ink", email: "ravi@tronx.dev", code: "TX-1011", phone: "+91 98000 10011", location: "Pune", skills: "react,typescript,charts", bio: "Ward board, reputation dashboard, inventory UI." },
     { id: "seed_lena", name: "Lena Ortiz", title: "Operations Lead", role: "team_lead", avatar: "mist", email: "lena@tronx.dev", code: "TX-1012", phone: "+91 98000 10012", location: "Bengaluru", skills: "ops,vendor,process", bio: "Keeps delivery, vendors and internal systems moving." },
     { id: "seed_noah", name: "Noah Kim", title: "Marketing Associate", role: "employee", avatar: "pine", email: "noah@tronx.dev", code: "TX-1013", phone: "+91 98000 10013", location: "Remote", skills: "content,campaigns,brand", bio: "Campaigns around restaurant SaaS and review automation." },
+    { id: "seed_ea", name: "Meera Iyer", title: "Executive Assistant", role: "executive_assistant", avatar: "mist", email: "meera@tronx.dev", code: "TX-1015", phone: "+91 98000 10015", location: "Bengaluru", skills: "calendar,coordination,communications", bio: "Runs the Founder & CEO office — calendar, meetings, follow-through and visitor flow." },
   ];
 
   for (const p of people) {
@@ -88,8 +90,18 @@ export async function seedOrganization(
     )`;
   }
 
-  await sql`update profiles set bio = ${"Sets the company direction and owns the operating cadence."},
-    skills = ${"leadership,product,operations"}, location = ${"Bengaluru"}, employment_type = ${"full_time"}
+  await sql`update profiles set
+    display_name = ${"Vides"},
+    email = ${"videshthota889@gmail.com"},
+    work_email = ${"videshthota889@gmail.com"},
+    phone = ${"6305003695"},
+    title = ${"Founder & CEO"},
+    username = ${"vides"},
+    role = ${"ceo"},
+    bio = ${"Founder and CEO of TRONX. Sets company direction and owns the operating cadence."},
+    skills = ${"leadership,product,operations"},
+    location = ${"Bengaluru"},
+    employment_type = ${"full_time"}
     where id = ${ceoId}`;
 
   const kiran = "seed_kiran";
@@ -104,6 +116,7 @@ export async function seedOrganization(
   const ravi = "seed_ravi";
   const lena = "seed_lena";
   const noah = "seed_noah";
+  const ea = "seed_ea";
 
   await sql`update departments set head_id = ${faiziya} where id = ${depAi}`;
   await sql`update departments set head_id = ${maya} where id = ${depEng}`;
@@ -122,6 +135,7 @@ export async function seedOrganization(
   await sql`update profiles set department_id = ${depOps}, manager_id = ${kiran} where id = ${lena}`;
   await sql`update profiles set department_id = ${depMkt}, manager_id = ${aisha} where id = ${noah}`;
   await sql`update profiles set department_id = ${depFin}, manager_id = ${ceoId} where id = ${kiran}`;
+  await sql`update profiles set department_id = ${depHr}, manager_id = ${ceoId} where id = ${ea}`;
   await sql`update profiles set department_id = ${depEng} where id = ${ceoId}`;
 
   const eng = "seed_team_eng";
@@ -139,7 +153,7 @@ export async function seedOrganization(
     [eng, ceoId], [eng, maya], [eng, prakash], [eng, hemanth], [eng, infran], [eng, ravi],
     [design, harsha], [design, jordan], [design, ceoId],
     [ai, faiziya], [ai, ceoId], [ai, prakash],
-    [ops, lena], [ops, kiran],
+    [ops, lena], [ops, kiran], [ops, ea],
   ];
   for (const [tid, pid] of teamMembers) {
     await sql`insert into team_members (team_id, profile_id) values (${tid}, ${pid})`;
@@ -148,7 +162,7 @@ export async function seedOrganization(
   await sql`update profiles set team_id = ${eng} where id in (${maya}, ${prakash}, ${hemanth}, ${infran}, ${ravi}, ${ceoId})`;
   await sql`update profiles set team_id = ${design} where id in (${jordan}, ${harsha})`;
   await sql`update profiles set team_id = ${ai} where id = ${faiziya}`;
-  await sql`update profiles set team_id = ${ops} where id in (${lena}, ${kiran})`;
+  await sql`update profiles set team_id = ${ops} where id in (${lena}, ${kiran}, ${ea})`;
 
   const hospital = "seed_prj_hospital";
   const restaurant = "seed_prj_restaurant";
@@ -163,7 +177,7 @@ export async function seedOrganization(
     (${kiosk}, ${orgId}, ${"AI Kiosk"}, ${"In-venue assistant kiosk with voice, vision and queue management."}, ${faiziya}, ${ai}, ${"active"}, ${"medium"}, ${day(-18)}, ${day(45)}, ${"sand"}),
     (${estate}, ${orgId}, ${"Real Estate Platform"}, ${"Listings, agent CRM, viewing scheduler and document vault."}, ${prakash}, ${eng}, ${"planning"}, ${"medium"}, ${day(-6)}, ${day(60)}, ${"slate"})`;
 
-  const allPeople = [ceoId, kiran, maya, aisha, prakash, jordan, hemanth, infran, harsha, faiziya, ravi, lena, noah];
+  const allPeople = [ceoId, kiran, maya, aisha, prakash, jordan, hemanth, infran, harsha, faiziya, ravi, lena, noah, ea];
   for (const pid of allPeople) {
     for (const prj of [hospital, restaurant, reviews]) {
       await sql`insert into project_members (project_id, profile_id) values (${prj}, ${pid}) on conflict do nothing`;
@@ -382,4 +396,89 @@ export async function seedOrganization(
     (${nid("ann")}, ${orgId}, ${maya}, ${"Hospital cut this week"}, ${"Appointment API and validation must land before Friday. Flag blockers in #hospital-platform."}, ${"company"}, ${ago(8)})`;
 
   void ceoName;
+}
+
+export async function ensureExecutiveAssistant(sql: Sql, orgId: string, ceoId: string): Promise<void> {
+  const existing = await sql`select id from profiles where org_id = ${orgId} and (
+    role = ${"executive_assistant"} or id = ${"seed_ea"} or lower(coalesce(email,'')) = ${"meera@tronx.dev"}
+  ) limit 1`;
+  if (existing[0]) {
+    await sql`update profiles set
+      role = ${"executive_assistant"},
+      title = ${"Executive Assistant"},
+      manager_id = ${ceoId}
+      where id = ${existing[0].id as string} and role != ${"ceo"}`;
+    return;
+  }
+  const id = "seed_ea";
+  try {
+    await sql`insert into profiles (
+      id, org_id, email, work_email, display_name, title, role, avatar_key, last_seen_at,
+      employee_code, phone, employment_type, location, skills, bio, joining_date, status, manager_id
+    ) values (
+      ${id}, ${orgId}, ${"meera@tronx.dev"}, ${"meera@tronx.dev"}, ${"Meera Iyer"}, ${"Executive Assistant"},
+      ${"executive_assistant"}, ${"mist"}, now(), ${"TX-1015"}, ${"+91 98000 10015"}, ${"full_time"},
+      ${"Bengaluru"}, ${"calendar,coordination,communications"},
+      ${"Runs the Founder & CEO office — calendar, meetings, follow-through and visitor flow."},
+      now()::date, ${"active"}, ${ceoId}
+    )`;
+  } catch {
+    return;
+  }
+  const general = await sql`select id from channels where org_id = ${orgId} and name = ${"general"} limit 1`;
+  if (general[0]) {
+    await sql`insert into channel_members (channel_id, profile_id) values (${general[0].id as string}, ${id}) on conflict do nothing`;
+  }
+  const hr = await sql`select id from departments where org_id = ${orgId} and name = ${"HR"} limit 1`;
+  if (hr[0]) {
+    await sql`update profiles set department_id = ${hr[0].id as string} where id = ${id}`;
+  }
+  const ops = await sql`select id from teams where org_id = ${orgId} and name = ${"Ops Desk"} limit 1`;
+  if (ops[0]) {
+    await sql`insert into team_members (team_id, profile_id) values (${ops[0].id as string}, ${id}) on conflict do nothing`;
+    await sql`update profiles set team_id = ${ops[0].id as string} where id = ${id}`;
+  }
+}
+
+export async function ensureAgencyFounder(sql: Sql, orgId: string, ceoId: string): Promise<void> {
+  const existing = await sql`select id, role from profiles where org_id = ${orgId} and (
+    id = ${"seed_founder"} or lower(coalesce(email,'')) = ${FOUNDER.email} or lower(coalesce(work_email,'')) = ${FOUNDER.email}
+  ) limit 1`;
+  if (existing[0]) {
+    if (String(existing[0].role) !== "ceo") {
+      await sql`update profiles set
+        role = ${"founder"},
+        title = ${FOUNDER.title},
+        display_name = ${FOUNDER.name},
+        email = ${FOUNDER.email},
+        work_email = ${FOUNDER.email},
+        username = ${FOUNDER.username},
+        employee_code = coalesce(employee_code, ${FOUNDER.code}),
+        phone = coalesce(phone, ${FOUNDER.phone}),
+        location = coalesce(location, ${FOUNDER.location}),
+        manager_id = ${ceoId},
+        status = ${"active"}
+        where id = ${existing[0].id as string}`;
+    }
+    return;
+  }
+  const id = "seed_founder";
+  try {
+    await sql`insert into profiles (
+      id, org_id, email, work_email, display_name, title, role, avatar_key, last_seen_at,
+      employee_code, phone, employment_type, location, skills, bio, joining_date, status, manager_id, username
+    ) values (
+      ${id}, ${orgId}, ${FOUNDER.email}, ${FOUNDER.email}, ${FOUNDER.name}, ${FOUNDER.title},
+      ${"founder"}, ${"ink"}, now(), ${FOUNDER.code}, ${FOUNDER.phone}, ${"full_time"},
+      ${FOUNDER.location}, ${"strategy,partnerships,sales"},
+      ${"Agency founder seat. Signs in with tronx.agency@gmail.com — pipeline, money and the company."},
+      now()::date, ${"active"}, ${ceoId}, ${FOUNDER.username}
+    )`;
+  } catch {
+    return;
+  }
+  const general = await sql`select id from channels where org_id = ${orgId} and name = ${"general"} limit 1`;
+  if (general[0]) {
+    await sql`insert into channel_members (channel_id, profile_id) values (${general[0].id as string}, ${id}) on conflict do nothing`;
+  }
 }

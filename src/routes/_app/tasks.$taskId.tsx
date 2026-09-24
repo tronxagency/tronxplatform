@@ -4,6 +4,7 @@ import { Play, Square } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { PriorityBadge, StatusBadge, Surface } from "@/components/marks";
+import { MeetButton } from "@/components/meet-dialog";
 import { Button } from "@/components/ui/button";
 import { PersonAvatar, Skeleton } from "@/components/ui/display";
 import { Input, Textarea } from "@/components/ui/forms";
@@ -124,6 +125,14 @@ function TaskPage() {
             <StatusBadge status={task.status} />
             <PriorityBadge priority={task.priority} />
             {task.blocked ? <span className="text-xs text-danger">Blocked</span> : null}
+            <MeetButton
+              label="Meet task members"
+              defaultScope="direct"
+              profileIds={[task.assigneeId, task.creatorId, me.id].filter(Boolean) as string[]}
+              taskId={task.id}
+              projectId={task.projectId ?? undefined}
+              title={task.title}
+            />
           </div>
           <WorkflowBar
             task={task}

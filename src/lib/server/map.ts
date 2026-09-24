@@ -15,6 +15,7 @@ import type {
   Priority,
   Profile,
   Project,
+  ProjectMemberRole,
   ProjectStatus,
   Role,
   Task,
@@ -118,7 +119,11 @@ export function mapTeam(r: Record<string, unknown>, memberIds: string[] = []): T
   };
 }
 
-export function mapProject(r: Record<string, unknown>, memberIds: string[] = []): Project {
+export function mapProject(
+  r: Record<string, unknown>,
+  memberIds: string[] = [],
+  memberRoles: Record<string, ProjectMemberRole> = {},
+): Project {
   const total = asNum(r.task_total);
   const done = asNum(r.task_done);
   return {
@@ -135,6 +140,7 @@ export function mapProject(r: Record<string, unknown>, memberIds: string[] = [])
     colorKey: asString(r.color_key, "mist"),
     createdAt: toIso(r.created_at),
     memberIds,
+    memberRoles,
     taskTotal: total,
     taskDone: done,
     progress: total > 0 ? Math.round((done / total) * 100) : 0,
@@ -279,6 +285,7 @@ export function mapEvent(r: Record<string, unknown>): CalendarEvent {
     endsAt: toIso(r.ends_at),
     type: asString(r.type, "meeting"),
     projectId: r.project_id ? asString(r.project_id) : null,
+    meetingId: r.meeting_id ? asString(r.meeting_id) : null,
   };
 }
 

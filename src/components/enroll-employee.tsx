@@ -32,10 +32,30 @@ export function EnrollEmployeeDialog({
     mutationFn: (payload: Parameters<typeof enrollEmployee>[0] extends { data: infer D } ? D : never) =>
       enrollEmployee({ data: payload }),
     onSuccess: async (res) => {
-      toast.success(`Enrolled ${res.employeeCode}`);
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const link = res.inviteToken ? `${origin}/invite/${res.inviteToken}` : "";
+      toast.success(
+        res.onboardingId
+          ? `Enrolled ${res.employeeCode}. Executive onboarding opened on the desk.`
+          : link
+            ? `Enrolled ${res.employeeCode}. Invitation ready.`
+            : `Enrolled ${res.employeeCode}`,
+      );
+      if (link) {
+        try {
+          await navigator.clipboard.writeText(link);
+          toast.message("Invitation link copied");
+        } catch {
+          /* ignore */
+        }
+      }
       setOpen(false);
       await qc.invalidateQueries();
-      if (res.id) await navigate({ to: "/employees/$employeeId", params: { employeeId: res.id } });
+      if (res.onboardingId) {
+        await navigate({ to: "/onboarding/$onboardingId", params: { onboardingId: res.onboardingId } });
+      } else if (res.id) {
+        await navigate({ to: "/employees/$employeeId", params: { employeeId: res.id } });
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -86,7 +106,7 @@ export function EnrollEmployeeDialog({
   }
 
   const roles = assignableRoles(me.role);
-  const managers = members.filter((m) => m.role === "ceo" || m.role === "founder" || m.role === "manager");
+  const managers = members.filter((m) => m.role === "ceo" || m.role === "founder" || m.role === "manager" || m.role === "executive_assistant");
   const leads = members.filter((m) => m.role === "team_lead" || m.role === "manager");
   const busy = enroll.isPending || update.isPending;
 
@@ -97,7 +117,7 @@ export function EnrollEmployeeDialog({
         <p className="mt-1 text-sm text-muted-foreground">
           {isEdit
             ? "Updates land immediately. Role changes are limited by your own authority."
-            : "Creates their account and portal. They activate it by signing in with this email."}
+            : "Creates an invitation. Founders and executive assistants also open a 14-day checklist on the executive desk. They set their own password — you never invent a permanent one for them."}
         </p>
         <form className="mt-5 space-y-6" onSubmit={onSubmit} key={person?.id ?? "new"}>
           <Section title="Personal">

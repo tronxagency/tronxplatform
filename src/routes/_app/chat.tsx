@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Eye, Pencil, Reply, ThumbsUp, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/marks";
 import { Button } from "@/components/ui/button";
 import { PersonAvatar, ScrollArea } from "@/components/ui/display";
@@ -9,14 +10,18 @@ import { Input } from "@/components/ui/forms";
 import { useWorkspace } from "@/components/workspace";
 import { canManageWork } from "@/lib/permissions";
 import {
+  createGroupChannel,
   deleteMessage,
   editMessage,
+  getChannelPresence,
   listChannels,
   listMessages,
   openDirectMessage,
+  pingTyping,
   sendMessage,
   toggleReaction,
 } from "@/lib/server/fns";
+import { MeetButton } from "@/components/meet-dialog";
 import { cn, isOnline, relativeTime } from "@/lib/utils";
 
 type ChatSearch = { channel?: string };
@@ -91,6 +96,23 @@ function ChatPage() {
     mutationFn: (data: { id: string; body: string }) => editMessage({ data }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["messages", active] }),
   });
+  const group = useMutation({
+    mutationFn: (profileIds: string[]) => createGroupChannel({ data: { profileIds } }),
+    onSuccess: async (res) => {
+      setActive(res.id);
+      await qc.invalidateQueries({ queryKey: ["channels"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const typeMut = useMutation({
+    mutationFn: () => pingTyping({ data: active! }),
+  });
+  const presence = useQuery({
+    queryKey: ["presence", active],
+    queryFn: () => getChannelPresence({ data: active! }),
+    enabled: Boolean(active),
+    refetchInterval: 4000,
+  });
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -103,6 +125,7 @@ function ChatPage() {
       department: all.filter((c) => c.type === "department"),
       team: all.filter((c) => c.type === "team"),
       project: all.filter((c) => c.type === "project"),
+      groups: all.filter((c) => c.type === "group"),
       dms: all.filter((c) => c.type === "dm"),
     };
   }, [channels.data]);
@@ -120,6 +143,7 @@ function ChatPage() {
           <ChannelGroup title="Departments" items={grouped.department} active={active} onPick={setActive} />
           <ChannelGroup title="Teams" items={grouped.team} active={active} onPick={setActive} />
           <ChannelGroup title="Projects" items={grouped.project} active={active} onPick={setActive} />
+          <ChannelGroup title="Groups" items={grouped.groups} active={active} onPick={setActive} />
           <p className="mt-3 px-2 pb-2 text-[11px] tracking-wide text-muted-foreground uppercase">Direct</p>
           {grouped.dms.map((c) => (
             <ChannelBtn key={c.id} name={c.name} unread={c.unread} active={c.id === active} onClick={() => setActive(c.id)} />
@@ -141,6 +165,28 @@ function ChatPage() {
                 </option>
               ))}
             </select>
+            <select
+              className="mt-2 h-9 w-full rounded-lg border border-input bg-secondary px-2 text-xs"
+              defaultValue=""
+              onChange={(e) => {
+                const id = e.target.value;
+                e.target.value = "";
+                if (!id) return;
+                const others = members.filter((m) => m.id !== me.id && m.id !== id && m.status === "active").slice(0, 1);
+                if (others.length === 0) {
+                  toast.error("Need two other people for a group");
+                  return;
+                }
+                group.mutate([id, others[0]!.id]);
+              }}
+            >
+              <option value="">Start a group…</option>
+              {members.filter((m) => m.id !== me.id && m.status === "active").map((m) => (
+                <option key={m.id} value={m.id}>
+                  Group with {m.displayName}…
+                </option>
+              ))}
+            </select>
           </div>
         </aside>
         <section className="flex min-h-[50vh] flex-col">
@@ -148,6 +194,20 @@ function ChatPage() {
             <p className="min-w-0 flex-1 truncate text-sm font-medium">
               {current ? (current.type === "dm" ? current.name : `# ${current.name}`) : "Select a channel"}
             </p>
+            {current?.type === "dm" ? (
+              <MeetButton
+                label="Video call"
+                defaultScope="direct"
+                title={`Call ${current.name}`}
+                profileIds={members.filter((m) => current.name.includes(m.displayName) && m.id !== me.id).slice(0, 1).map((m) => m.id)}
+              />
+            ) : current?.type === "team" || current?.type === "project" || current?.type === "company" ? (
+              <MeetButton
+                label="Video call"
+                defaultScope={current.type === "company" ? "company" : current.type === "team" ? "team" : "project"}
+                title={`${current.name} call`}
+              />
+            ) : null}
             <Input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -287,7 +347,10 @@ function ChatPage() {
             <div className="flex gap-2">
               <Input
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e) => {
+                  setBody(e.target.value);
+                  if (active && e.target.value.trim()) typeMut.mutate();
+                }}
                 placeholder={current ? `Message ${current.name} — use @name to mention` : "Select a channel"}
                 disabled={!active}
               />
@@ -295,6 +358,15 @@ function ChatPage() {
                 Send
               </Button>
             </div>
+            {(presence.data?.typingIds ?? []).length > 0 ? (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {presence.data!.typingIds
+                  .map((id) => members.find((m) => m.id === id)?.displayName)
+                  .filter(Boolean)
+                  .join(", ")}{" "}
+                typing…
+              </p>
+            ) : null}
           </form>
         </section>
       </div>

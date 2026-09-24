@@ -16,7 +16,7 @@ import {
   updateMember,
   updateOrgSettings,
 } from "@/lib/server/fns";
-import { assignableRoles, canModifyPerson, hasPerm } from "@/lib/permissions";
+import { ALL_PERMS, PERM_LABEL, assignableRoles, canModifyPerson, hasPerm } from "@/lib/permissions";
 import { ROLE_LABEL } from "@/lib/types";
 import { relativeTime } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
@@ -60,7 +60,7 @@ function AdminPage() {
       <PageHeader
         eyebrow="Administration"
         title="Organization"
-        description="People, departments, teams and the audit trail. Enrollment is limited to CEO, directors and managers."
+        description="People, departments, teams and the audit trail. Enrollment is limited to CEO, directors, the executive assistant and managers. Founder and EA enrollments open a first-week desk automatically."
         actions={
           hasPerm(me.role, "employee.create") ? (
             <EnrollEmployeeDialog>
@@ -174,7 +174,7 @@ function AdminPage() {
         <Surface className="p-5">
           <h2 className="font-display text-sm font-semibold">Permission matrix</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            CEO, Founder/Director and Manager may enroll employees. Team leads and employees cannot — the API rejects those requests even if a button is forced.
+            CEO, Founder/Director, Executive Assistant and Manager may enroll employees. Team leads and employees cannot — the API rejects those requests even if a button is forced.
           </p>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -183,6 +183,7 @@ function AdminPage() {
                   <th className="py-2 pr-3">Capability</th>
                   <th className="py-2 pr-3">CEO</th>
                   <th className="py-2 pr-3">Director</th>
+                  <th className="py-2 pr-3">EA</th>
                   <th className="py-2 pr-3">Manager</th>
                   <th className="py-2 pr-3">Lead</th>
                   <th className="py-2">Employee</th>
@@ -190,11 +191,15 @@ function AdminPage() {
               </thead>
               <tbody className="text-muted-foreground">
                 {[
-                  ["Enroll employees", "Yes", "Yes", "Yes", "No", "No"],
-                  ["Assign tasks", "Yes", "Yes", "Yes", "Yes", "Self"],
-                  ["Company analytics", "Yes", "Yes", "Team", "Team", "Own"],
-                  ["Change CEO", "—", "No", "No", "No", "No"],
-                  ["Audit logs", "Yes", "Yes", "No", "No", "No"],
+                  ...ALL_PERMS.map((key) => [
+                    PERM_LABEL[key],
+                    hasPerm("ceo", key) ? "Yes" : "—",
+                    hasPerm("founder", key) ? "Yes" : "—",
+                    hasPerm("executive_assistant", key) ? "Yes" : "—",
+                    hasPerm("manager", key) ? "Yes" : "—",
+                    hasPerm("team_lead", key) ? "Yes" : "—",
+                    hasPerm("employee", key) ? "Yes" : "—",
+                  ]),
                 ].map((row) => (
                   <tr key={row[0]} className="border-b border-border last:border-0">
                     {row.map((c, i) => (

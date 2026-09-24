@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   Bell,
   CalendarDays,
+  ClipboardCheck,
   FolderKanban,
   LayoutDashboard,
   MessageSquare,
@@ -11,12 +12,15 @@ import {
   Search,
   Sparkles,
   SquareCheckBig,
+  Target,
   UserPlus,
   Users,
+  Video,
+  IndianRupee,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { searchAll } from "@/lib/server/fns";
-import { canEnroll, hasPerm } from "@/lib/permissions";
+import { canEnroll, canStartMeeting, hasPerm, isExecOffice } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "./workspace";
 
@@ -25,11 +29,13 @@ export function CommandPalette({
   onOpenChange,
   onCreateTask,
   onEnroll,
+  onStartMeeting,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreateTask: () => void;
   onEnroll?: () => void;
+  onStartMeeting?: () => void;
 }) {
   const navigate = useNavigate();
   const { me } = useWorkspace();
@@ -73,7 +79,7 @@ export function CommandPalette({
             <Command.Input
               value={q}
               onValueChange={setQ}
-              placeholder="Search people, projects, tasks…"
+              placeholder="Search people, projects, tasks, leads, meetings…"
               className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
             <kbd className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
@@ -89,7 +95,7 @@ export function CommandPalette({
               {canEnroll(me.role) ? (
                 <Item
                   icon={UserPlus}
-                  label="Enroll employee"
+                  label="Invite employee"
                   onSelect={() => {
                     onOpenChange(false);
                     onEnroll?.();
@@ -99,11 +105,54 @@ export function CommandPalette({
               {hasPerm(me.role, "project.create") ? (
                 <Item icon={FolderKanban} label="Create project" onSelect={() => go("/projects")} />
               ) : null}
+              {canStartMeeting(me.role, "direct") ? (
+                <Item
+                  icon={Video}
+                  label="Start meeting"
+                  onSelect={() => {
+                    onOpenChange(false);
+                    onStartMeeting?.();
+                  }}
+                />
+              ) : null}
+              {canStartMeeting(me.role, "team") ? (
+                <Item
+                  icon={Video}
+                  label="Meet team"
+                  onSelect={() => {
+                    onOpenChange(false);
+                    onStartMeeting?.();
+                  }}
+                />
+              ) : null}
+              {canStartMeeting(me.role, "project") ? (
+                <Item
+                  icon={Video}
+                  label="Meet project"
+                  onSelect={() => {
+                    onOpenChange(false);
+                    onStartMeeting?.();
+                  }}
+                />
+              ) : null}
               <Item icon={LayoutDashboard} label="Dashboard" onSelect={() => go("/")} />
               <Item icon={Users} label="Employees" onSelect={() => go("/employees")} />
+              {hasPerm(me.role, "lead.view") ? (
+                <Item icon={Target} label="Leads" onSelect={() => go("/leads")} />
+              ) : null}
+              {hasPerm(me.role, "lead.manage") ? (
+                <Item icon={Plus} label="New lead" onSelect={() => go("/leads")} />
+              ) : null}
+              {hasPerm(me.role, "finance.view") ? (
+                <Item icon={IndianRupee} label="Finance" onSelect={() => go("/finance")} />
+              ) : null}
+              {isExecOffice(me.role) || hasPerm(me.role, "onboarding.manage") ? (
+                <Item icon={ClipboardCheck} label="Executive onboarding" onSelect={() => go("/onboarding")} />
+              ) : null}
               <Item icon={FolderKanban} label="Projects" onSelect={() => go("/projects")} />
               <Item icon={SquareCheckBig} label="Tasks" onSelect={() => go("/tasks")} />
               <Item icon={MessageSquare} label="Chat" onSelect={() => go("/chat")} />
+              <Item icon={Video} label="Meetings" onSelect={() => go("/meetings")} />
               <Item icon={CalendarDays} label="Calendar" onSelect={() => go("/calendar")} />
               <Item icon={Bell} label="Inbox" onSelect={() => go("/inbox")} />
               <Item icon={Sparkles} label="TRONX AI" onSelect={() => go("/ai")} />
